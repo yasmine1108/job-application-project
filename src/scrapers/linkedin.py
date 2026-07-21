@@ -13,10 +13,20 @@ class LinkedInScraper(BaseScraper):
         self.output_file = "data/outputs/linkedin_links.json"
         self.jobs_list_file = "data/outputs/linkedin_job_list.json"
 
+    def is_logged_in(self):
+        try:
+            # Nav search bar only shows once authenticated
+            self.page.wait_for_selector(
+                "input[placeholder='Search']", timeout=8000
+            )
+            return True
+        except Exception:
+            return False
+        
     def login(self):
         print("Connexion à LinkedIn en cours...")
         
-        self.page.locator("xpath=/html/body/div[2]/nav/div/a[1]").click()
+        self.page.get_by_role("link", name="Sign in", exact=True).click()
         self.sb.sleep(5)
         email_input = self.page.get_by_role("textbox", name="Email or phone")
         email_input.wait_for(state="visible")
@@ -42,8 +52,9 @@ class LinkedInScraper(BaseScraper):
         search_input.wait_for(state="visible")
         search_input.fill(keyword)
         search_input.press("Enter")
-        jobsbuttonvisible = self.page.locator("xpath=/html/body/div[1]/div[2]/div[2]/div[2]/div/div/div/div/div/a[1]")
+        jobsbuttonvisible = self.page.get_by_role("radio", name="Filter by Jobs")
         # if jobsbuttonvisible.is_visible():
+        jobsbuttonvisible.wait_for(state="visible")
         jobsbuttonvisible.click()
 
         self.sb.sleep(10)
