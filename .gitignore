@@ -1,0 +1,39 @@
+# Environment variables
+.env
+
+# Virtual environments
+cv_parser_env/
+venv/
+env/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.Python
+
+# Project-specific directories
+data/outputs/
+data/cache/
+downloaded_files/
+playwright_profile/
+
+# Debug files
+debug_*.txt
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# System files
+.DS_Store
+Thumbs.db
+.env.local
