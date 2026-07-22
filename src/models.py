@@ -73,6 +73,12 @@ class JobOffer(BaseModel):
     description: str | None
     date_posted: str | None
     job_url: str | None
+    accepting_applications: bool = True
+    employment_type: str | None # e.g., "Full-time", "Part-time", "Contract", "Internship"
+    work_arrangement: str | None # e.g., "Remote", "On-site", "Hybrid"
+    required_skills: list[str] = []
+    required_experience: str | None # e.g., "2-5 years", "Entry-level", "Senior"
+    easy_apply: bool = False
 
 class MatchingProfile(BaseModel):
     professional_summary: str | None

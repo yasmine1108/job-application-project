@@ -2,6 +2,7 @@ import json
 import os
 
 from src.scrapers.base_scraper import BaseScraper
+from src.models import JobOffer
 from config.settings import Settings
 
 class LinkedInScraper(BaseScraper):
@@ -110,7 +111,7 @@ class LinkedInScraper(BaseScraper):
 
     def extract_job_list(self):
         urls_existantes = []
-        items = []
+        jobs = []
         new_urls = []
         if os.path.exists(self.output_file) and os.path.getsize(self.output_file) > 0:
             try:
@@ -121,33 +122,31 @@ class LinkedInScraper(BaseScraper):
                 urls_existantes = []
 
         if os.path.exists(self.jobs_list_file) and os.path.getsize(self.jobs_list_file) > 0:
-            try : 
+            try:
                 with open(self.jobs_list_file, "r", encoding="utf-8") as f:
-                    items = json.load(f)
+                    saved_jobs = json.load(f)
+                jobs = [JobOffer(**job) if isinstance(job, dict) else job for job in saved_jobs]
             except json.JSONDecodeError:
-                items = []
-        
-        existing_job_urls = {item["job_url"] for item in items}
+                jobs = []
+
+        existing_job_urls = {job.job_url for job in jobs if job.job_url}
         new_urls = [u for u in urls_existantes if u not in existing_job_urls]
-        
+
         for url in new_urls:
             self.sb.sleep(5)
             self.page.goto(url)
-            item = {}
-            item['title']=""
-            item['company']=""
-            item['location']=""
-            item['description']=""
-            item['date_posted']=""
-            item['job_url']=url
 
-            item.update(self._extract_via_dom())
+            job_offer = self._extract_via_dom()
+            job_offer.job_url = url
+            jobs.append(job_offer)
 
-            items.append(item)
-
-        
         with open(self.jobs_list_file, "w", encoding="utf-8") as f:
-            json.dump(items, f, indent=4, ensure_ascii=False)
+            json.dump(
+                [job.model_dump() if hasattr(job, "model_dump") else job.dict() for job in jobs],
+                f,
+                indent=4,
+                ensure_ascii=False,
+            )
 
     def _extract_via_dom(self):
 
@@ -158,14 +157,14 @@ class LinkedInScraper(BaseScraper):
 
         parts = self.page.title().split(" | ")
 
-        return {
-            "title": parts[0] if parts else "",
-            "company": self._safe_text(lambda: self.page.locator("a[href*='/company/']").first),
-            "location": self._safe_text(lambda: self.page.locator("text=/Remote|Hybrid|On-site|(?:[A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+(?:, [A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+)+)/").first),
-            "description": self._safe_text(lambda: self.page.locator("div:has(h2:text-matches('About the job', 'i')) ~ p").first),
-            "date_posted": self._safe_text(lambda: self.page.locator(
-        r"text=/\b(?:\d+\+?\s+)?(?:hour|day|week|month|year)s?\s+ago\b/i").first),
-        }
+        return JobOffer(
+            title=parts[0] if parts else "",
+            company=self._safe_text(lambda: self.page.locator("a[href*='/company/']").first),
+            location=self._safe_text(lambda: self.page.locator("text=/Remote|Hybrid|On-site|(?:[A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+(?:, [A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+)+)/").first),
+            description=self._safe_text(lambda: self.page.locator("div:has(h2:text-matches('About the job', 'i')) ~ p").first),
+            date_posted=self._safe_text(lambda: self.page.locator(
+                r"text=/\b(?:\d+\+?\s+)?(?:hour|day|week|month|year)s?\s+ago\b/i").first),
+        )
 
     def auto_apply(self, job_url, cv_path):
         """Méthode dédiée à l'interaction bouton par bouton (Phase 2)"""
