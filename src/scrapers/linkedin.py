@@ -141,11 +141,7 @@ class LinkedInScraper(BaseScraper):
             item['date_posted']=""
             item['job_url']=url
 
-            item['title'] = self.page.locator("h1").inner_text()
-            item['company'] = self.page.locator("a[class*='topcard__org-name-link']").inner_text()
-            item['location'] = self.page.locator("span[class='topcard__flavor topcard__flavor--bullet']").inner_text()
-            item['description'] = self.page.locator("div[class*='description__text']").inner_text()
-            item['date_posted'] = self.page.locator("span[class*='posted-time-ago__text']").inner_text()
+            item.update(self._extract_via_dom())
 
             items.append(item)
 
@@ -153,6 +149,23 @@ class LinkedInScraper(BaseScraper):
         with open(self.jobs_list_file, "w", encoding="utf-8") as f:
             json.dump(items, f, indent=4, ensure_ascii=False)
 
+    def _extract_via_dom(self):
+
+        # html = self.page.content()
+
+        # with open("job.html", "w", encoding="utf-8") as f:
+        #     f.write(html)
+
+        parts = self.page.title().split(" | ")
+
+        return {
+            "title": parts[0] if parts else "",
+            "company": self._safe_text(lambda: self.page.locator("a[href*='/company/']").first),
+            "location": self._safe_text(lambda: self.page.locator("text=/Remote|Hybrid|On-site|(?:[A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+(?:, [A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+)+)/").first),
+            "description": self._safe_text(lambda: self.page.locator("div:has(h2:text-matches('About the job', 'i')) ~ p").first),
+            "date_posted": self._safe_text(lambda: self.page.locator(
+        r"text=/\b(?:\d+\+?\s+)?(?:hour|day|week|month|year)s?\s+ago\b/i").first),
+        }
 
     def auto_apply(self, job_url, cv_path):
         """Méthode dédiée à l'interaction bouton par bouton (Phase 2)"""

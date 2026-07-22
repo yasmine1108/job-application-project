@@ -66,6 +66,14 @@ class Language(BaseModel):
     name: str
     proficiency: str | None
 
+class JobOffer(BaseModel):
+    title: str | None
+    company: str | None
+    location: str | None
+    description: str | None
+    date_posted: str | None
+    job_url: str | None
+
 class MatchingProfile(BaseModel):
     professional_summary: str | None
     education: list[Education] = []

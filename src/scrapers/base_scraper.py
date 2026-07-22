@@ -80,3 +80,11 @@ class BaseScraper:
             self.browser.close()
         if self.pw:
             self.pw.stop()
+
+    def _safe_text(self, locator_fn, timeout=5000):
+        try:
+            loc = locator_fn()
+            loc.wait_for(state="visible", timeout=timeout)
+            return loc.inner_text()
+        except Exception:
+            return ""

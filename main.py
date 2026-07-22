@@ -16,10 +16,9 @@ if __name__ == "__main__":
     bot_linkedin = LinkedInScraper()
     
     bot_linkedin.start_browser()  
-    bot_linkedin.ensure_logged_in()          
-    bot_linkedin.search_and_collect_links("Python Developer")
+    # bot_linkedin.ensure_logged_in()          
+    # bot_linkedin.search_and_collect_links("Python Developer")
     bot_linkedin.extract_job_list()
-
     bot_linkedin.close_browser()
 
 
