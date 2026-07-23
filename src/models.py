@@ -1,6 +1,32 @@
 from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import pytz
+
+class EmploymentType(str, Enum):
+    FULL_TIME = "full-time"
+    PART_TIME = "part-time"
+    CONTRACT = "contract"
+    INTERNSHIP = "internship"
+    TEMPORARY = "temporary"
+    VOLUNTEER = "volunteer"
+    OTHER = "other"
+
+
+class WorkArrangement(str, Enum):
+    REMOTE = "remote"
+    HYBRID = "hybrid"
+    ON_SITE = "on-site"
+
+
+class ApplicationStatus(str, Enum):
+    NOT_APPLIED = "not_applied"
+    APPLIED = "applied"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CLOSED = "closed"
 
 @dataclass
 class ParsedTable:
@@ -66,19 +92,39 @@ class Language(BaseModel):
     name: str
     proficiency: str | None
 
-class JobOffer(BaseModel):
-    title: str | None
-    company: str | None
-    location: str | None
-    description: str | None
-    date_posted: str | None
-    job_url: str | None
+class RawJob(BaseModel):
+    """No inference."""
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    description: str | None = None
+    date_posted: str | None = None
+    employment_type: str | None = None   
+    work_arrangement: str | None = None  
     accepting_applications: bool = True
-    employment_type: str | None # e.g., "Full-time", "Part-time", "Contract", "Internship"
-    work_arrangement: str | None # e.g., "Remote", "On-site", "Hybrid"
-    required_skills: list[str] = []
-    required_experience: str | None # e.g., "2-5 years", "Entry-level", "Senior"
+    job_url: str | None = None
+    job_id: str | None = None
     easy_apply: bool = False
+    scraped_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
+
+
+class JobOffer(BaseModel):
+    """Matching profile — only fields a scoring/ranking step needs."""
+    job_url: str                 
+    job_id: str | None = None
+
+    employment_type: EmploymentType | None = None
+    work_arrangement: WorkArrangement | None = None
+    required_skills: list[str] = Field(default_factory=list)
+    required_experience: str | None = None
+    min_years_experience: int | None = None
+
+    easy_apply: bool = False     # relevant for apply-priority scoring, not just display
+
+    application_status: ApplicationStatus = ApplicationStatus.NOT_APPLIED
+    applied_at: datetime | None = None
+
+    inferred_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
 
 class MatchingProfile(BaseModel):
     professional_summary: str | None

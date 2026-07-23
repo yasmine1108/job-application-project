@@ -1,18 +1,24 @@
 import json
 import os
+from datetime import datetime
 
 from src.scrapers.base_scraper import BaseScraper
-from src.models import JobOffer
+from src.models import RawJob
 from config.settings import Settings
 
 class LinkedInScraper(BaseScraper):
+
     def __init__(self):
         super().__init__(base_url="http://www.linkedin.com/")
-        
+        self.EMPLOYMENT_TYPES = [
+            "full-time", "part-time", "internship", "contract",
+            "temporary", "volunteer", "other", "freelance"
+        ]
+        self.WORK_ARRANGEMENTS = ["remote", "hybrid", "on-site", "onsite"]
         self.email = Settings.LINKEDIN_EMAIL
         self.password = Settings.LINKEDIN_PASSWORD
         self.output_file = "data/outputs/linkedin_links.json"
-        self.jobs_list_file = "data/outputs/linkedin_job_list.json"
+        self.jobs_list_file = "data/outputs/linkedin_raw_job_list.json"
 
     def is_logged_in(self):
         try:
@@ -125,7 +131,7 @@ class LinkedInScraper(BaseScraper):
             try:
                 with open(self.jobs_list_file, "r", encoding="utf-8") as f:
                     saved_jobs = json.load(f)
-                jobs = [JobOffer(**job) if isinstance(job, dict) else job for job in saved_jobs]
+                jobs = [RawJob(**job) if isinstance(job, dict) else job for job in saved_jobs]
             except json.JSONDecodeError:
                 jobs = []
 
@@ -138,15 +144,50 @@ class LinkedInScraper(BaseScraper):
 
             job_offer = self._extract_via_dom()
             job_offer.job_url = url
+            job_offer.job_id = url.split("/")[-2]  # Extract job ID from URL
+            locator = self.page.get_by_text(
+                "No longer accepting applications",
+                exact=False
+            )
+            if locator.count() > 0:
+                job_offer.accepting_applications = False
+            
+            job_links = self.page.locator(
+                f'a[href*="{url}"]'
+            )
+            texts = []
+
+            for i in range(job_links.count()):
+                text = job_links.nth(i).inner_text().strip()
+
+                if text:
+                    texts.append(text)
+
+            work_arrangement = None
+            employment_type = None
+
+            for attribute in texts:
+                if attribute.lower() in self.WORK_ARRANGEMENTS:
+                    work_arrangement = attribute
+
+                if attribute.lower() in self.EMPLOYMENT_TYPES:
+                    employment_type = attribute
+
+            job_offer.work_arrangement = work_arrangement
+            job_offer.employment_type = employment_type
+            job_offer.easy_apply = self.page.locator("button[aria-label*='Easy Apply']").count() > 0
             jobs.append(job_offer)
 
+        serializable_jobs = []
+        for job in jobs:
+            job_data = job.model_dump() if hasattr(job, "model_dump") else job.dict()
+            for key, value in list(job_data.items()):
+                if isinstance(value, (datetime,)):
+                    job_data[key] = value.isoformat()
+            serializable_jobs.append(job_data)
+
         with open(self.jobs_list_file, "w", encoding="utf-8") as f:
-            json.dump(
-                [job.model_dump() if hasattr(job, "model_dump") else job.dict() for job in jobs],
-                f,
-                indent=4,
-                ensure_ascii=False,
-            )
+            json.dump(serializable_jobs, f, indent=4, ensure_ascii=False)
 
     def _extract_via_dom(self):
 
@@ -157,7 +198,7 @@ class LinkedInScraper(BaseScraper):
 
         parts = self.page.title().split(" | ")
 
-        return JobOffer(
+        return RawJob(
             title=parts[0] if parts else "",
             company=self._safe_text(lambda: self.page.locator("a[href*='/company/']").first),
             location=self._safe_text(lambda: self.page.locator("text=/Remote|Hybrid|On-site|(?:[A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+(?:, [A-ZÀ-ÿ][A-Za-zÀ-ÿ-]+)+)/").first),
