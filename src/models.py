@@ -56,7 +56,12 @@ class Project(BaseModel):
 
 class Skill(BaseModel):
     name: str
-    category: SkillCategory | None
+    category: SkillCategory | None = Field(
+        default=None,
+        description=(
+            "Category of a professional/technical skill (e.g. Python, Docker, communication). Use PROGRAMMING_LANGUAGE for coding languages like Python, Java, SQL. Do NOT put spoken/human languages (French, English, Arabic) here — those belong in spoken_languages."
+        ),
+    )
     evidence: list[str] | None
 
 class Certification(BaseModel):
@@ -65,7 +70,7 @@ class Certification(BaseModel):
     date: str | None
 
 class SpokenLanguage(BaseModel):
-    name: str
+    name: str = Field(description="A human/spoken language, e.g. French, English, Arabic. Never a programming language.")
     proficiency: str | None
 
 class MatchingProfile(BaseModel):
@@ -121,6 +126,6 @@ class SkillList(BaseModel):
 
 class CertificationList(BaseModel):
     certifications: list[Certification]
-    
+
 class SpokenLanguageList(BaseModel):
     spoken_languages: list[SpokenLanguage]

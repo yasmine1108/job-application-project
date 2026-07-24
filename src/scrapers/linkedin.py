@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 from src.scrapers.base_scraper import BaseScraper
-from src.models import RawJob
+from src.models_job import RawJob
 from config.settings import Settings
 
 class LinkedInScraper(BaseScraper):

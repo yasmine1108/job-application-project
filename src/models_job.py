@@ -1,7 +1,56 @@
-from datetime import datetime
 from enum import Enum
+from datetime import datetime
 from pydantic import BaseModel, Field
 import pytz
+
+
+class SkillCategory(str, Enum):
+    PROGRAMMING_LANGUAGE = "programming_language"
+    TECHNICAL = "technical"
+    TOOL = "tool"
+    SOFT = "soft"
+    DOMAIN = "domain"
+    OTHER = "other"
+
+
+class ImportanceLevel(str, Enum):
+    REQUIRED = "required"
+    PREFERRED = "preferred"
+    NICE_TO_HAVE = "nice_to_have"
+
+
+class DegreeLevel(str, Enum):
+    HIGH_SCHOOL = "high_school"
+    ASSOCIATE = "associate"
+    BACHELOR = "bachelor"
+    MASTER = "master"
+    DOCTORATE = "doctorate"
+    BACCALAUREATE = "baccalaureat"
+    UNDERGRADUATE = "undergraduate"
+    OTHER = "other"
+
+
+class JobSkillRequirement(BaseModel):
+    name: str
+    category: SkillCategory | None = None
+    importance: ImportanceLevel = ImportanceLevel.REQUIRED
+    min_years: int | None = None
+
+
+class EducationRequirement(BaseModel):
+    degree_level: DegreeLevel | None = None
+    field_of_study: str | None = None
+    importance: ImportanceLevel = ImportanceLevel.REQUIRED
+
+
+class CertificationRequirement(BaseModel):
+    name: str
+    importance: ImportanceLevel = ImportanceLevel.REQUIRED
+
+
+class LanguageRequirement(BaseModel):
+    name: str = Field(description="A spoken/human language required for the role, e.g. English, French. Not a programming language.")
+    min_proficiency: str | None = None  # e.g. "conversational", "fluent", "native"
 
 class EmploymentType(str, Enum):
     FULL_TIME = "full-time"
@@ -42,53 +91,50 @@ class RawJob(BaseModel):
     scraped_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
 
 class JobOfferInference(BaseModel):
-    required_skills: list[str] = Field(default_factory=list)
-    preferred_skills: list[str] = Field(default_factory=list)
+    """LLM output — matches JobOffer's inferred fields 1:1."""
+    skills: list[JobSkillRequirement] = Field(default_factory=list)
     required_experience: str | None = None
     min_years_experience: int | None = None
-    required_languages: list[str] = Field(default_factory=list)
-    required_education: list[str] = Field(default_factory=list)
-    required_certifications: list[str] = Field(default_factory=list)
-    required_soft_skills: list[str] = Field(default_factory=list)
+    required_languages: list[LanguageRequirement] = Field(default_factory=list)
+    required_education: list[EducationRequirement] = Field(default_factory=list)
+    required_certifications: list[CertificationRequirement] = Field(default_factory=list)
     description_language: str | None = None
+
 
 class JobOffer(BaseModel):
     """Matching profile — only fields a scoring/ranking step needs."""
-    job_url: str                 
+    job_url: str
     job_id: str | None = None
-    description_language: str | None = None #the language of the cv that will be sent should match the language of the job description
+    description_language: str | None = None
 
     employment_type: EmploymentType | None = None
     work_arrangement: WorkArrangement | None = None
-    required_skills: list[str] = Field(default_factory=list)
+
+    skills: list[JobSkillRequirement] = Field(default_factory=list)
     required_experience: str | None = None
     min_years_experience: int | None = None
-    preferred_skills: list[str] = Field(default_factory=list)
-    required_certifications: list[str] = Field(default_factory=list)
-    required_soft_skills: list[str] = Field(default_factory=list)
-    required_education: list[str] = Field(default_factory=list)
+    required_languages: list[LanguageRequirement] = Field(default_factory=list)
+    required_education: list[EducationRequirement] = Field(default_factory=list)
+    required_certifications: list[CertificationRequirement] = Field(default_factory=list)
 
     easy_apply: bool = False
-
     application_status: ApplicationStatus = ApplicationStatus.NOT_APPLIED
     applied_at: datetime | None = None
-
     inferred_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
 
-
-    def get_job_offer(self, raw_job:RawJob, job_inference:JobOfferInference):
-        return JobOffer(
+    @classmethod
+    def from_raw_and_inference(cls, raw_job: RawJob, job_inference: JobOfferInference) -> "JobOffer":
+        return cls(
             job_url=raw_job.job_url,
             job_id=raw_job.job_id,
             description_language=job_inference.description_language,
             employment_type=EmploymentType(raw_job.employment_type) if raw_job.employment_type else None,
             work_arrangement=WorkArrangement(raw_job.work_arrangement) if raw_job.work_arrangement else None,
-            required_skills=job_inference.required_skills,
+            skills=job_inference.skills,
             required_experience=job_inference.required_experience,
             min_years_experience=job_inference.min_years_experience,
-            preferred_skills=job_inference.preferred_skills,
-            required_certifications=job_inference.required_certifications,
-            required_soft_skills=job_inference.required_soft_skills,
+            required_languages=job_inference.required_languages,
             required_education=job_inference.required_education,
-            easy_apply=raw_job.easy_apply
+            required_certifications=job_inference.required_certifications,
+            easy_apply=raw_job.easy_apply,
         )

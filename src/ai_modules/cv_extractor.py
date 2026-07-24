@@ -7,6 +7,7 @@ from src.models import (
     ProjectList,
     SkillList,
     CertificationList,
+    SpokenLanguageList,
 )
 import json
 from pathlib import Path
@@ -28,6 +29,7 @@ class CVExtractor:
         self.project_llm = llm.with_structured_output(ProjectList)
         self.skill_llm = llm.with_structured_output(SkillList)
         self.certification_llm = llm.with_structured_output(CertificationList)
+        self.spoken_languages_llm = llm.with_structured_output(SpokenLanguageList)
 
         self.personal_prompt = ChatPromptTemplate.from_messages([
             ("system", """
@@ -186,6 +188,26 @@ CV Markdown (look for Certifications section):
             """),
         ])
 
+        self.spoken_languages_prompt = ChatPromptTemplate.from_messages([
+            ("system", """
+You are an expert at extracting spoken languages from CVs.
+
+Your ONLY task is to extract every human/spoken language mentioned in the CV.
+
+Rules:
+- Extract only human languages such as English, French, Arabic, Spanish, etc.
+- Do NOT extract programming languages or technical skills.
+- If a field is missing, return null. Never invent information.
+- If there are no spoken languages in the CV, return an empty list.
+- Preserve the language names as written in the CV when possible.
+            """),
+            ("human", """
+CV Markdown (look for Languages / Langues / Spoken Languages sections, and any mention in the profile or personal info):
+
+{markdown}
+            """),
+        ])
+
     def table_to_text(self, tables):
         text = ""
         for table in tables:
@@ -260,6 +282,15 @@ CV Markdown (look for Certifications section):
             self.certification_prompt | self.certification_llm
         ).invoke({"markdown": document.content})
 
+        # Spoken languages
+        spoken_languages_messages = self.spoken_languages_prompt.format_messages(
+            markdown=document.content
+        )
+        self._debug_dump("spoken_languages", spoken_languages_messages)
+        spoken_languages_result: SpokenLanguageList = (
+            self.spoken_languages_prompt | self.spoken_languages_llm
+        ).invoke({"markdown": document.content})
+
         candidate_profile = CandidateProfile(
             personal_information=personal_result.personal_information,
             professional_summary=personal_result.professional_summary,
@@ -268,6 +299,7 @@ CV Markdown (look for Certifications section):
             projects=project_result.projects,
             skills=skill_result.skills,
             certifications=certification_result.certifications,
+            spoken_languages=spoken_languages_result.spoken_languages,
         )
 
         # Cache the extracted profile
