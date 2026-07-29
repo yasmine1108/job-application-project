@@ -1,25 +1,26 @@
-# from src.ai_modules.cv_extractor import CVExtractor
-# from src.ai_modules.cv_parser import CVParser
+from src.ai_modules.job_offer_extractor import GeminiJobExtractor
+from src.ai_modules.cv_extractor import CVExtractor
+from src.ai_modules.cv_parser import CVParser
 # from src.scrapers.tanitjobs import TanitJobsScraper
-from src.scrapers.linkedin import LinkedInScraper
+# from src.scrapers.linkedin import LinkedInScraper
 
-# from langchain_ollama import ChatOllama
+from langchain_ollama import ChatOllama
 
-# llm = ChatOllama(
-#     model="qwen2.5:7b",
-#     temperature=0
-# )
-# print(llm.model)
+llm = ChatOllama(
+    model="qwen2.5:7b",
+    temperature=0
+)
+print(llm.model)
 
 if __name__ == "__main__":
 
-    bot_linkedin = LinkedInScraper()
+    # bot_linkedin = LinkedInScraper()
     
-    bot_linkedin.start_browser()  
-    # bot_linkedin.ensure_logged_in()          
-    # bot_linkedin.search_and_collect_links("Python Developer")
-    bot_linkedin.extract_job_list()
-    bot_linkedin.close_browser()
+    # bot_linkedin.start_browser()  
+    # # bot_linkedin.ensure_logged_in()          
+    # # bot_linkedin.search_and_collect_links("Python Developer")
+    # bot_linkedin.extract_job_list()
+    # bot_linkedin.close_browser()
 
 
     # tanitjobs_scraper = TanitJobsScraper()
@@ -33,5 +34,5 @@ if __name__ == "__main__":
     # extractor = CVExtractor(llm=llm, debug=False)
     # candidate = extractor.extract(document)
 
-    # print(candidate)
-    
+    job_extractor = GeminiJobExtractor()
+    job_extractor.extract_jobs_from_file()   

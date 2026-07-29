@@ -1,3 +1,4 @@
+from src.shared import normalize_skill_name
 from src.models import (
     CandidateProfile,
     ParsedDocument,
@@ -12,6 +13,7 @@ from src.models import (
 import json
 from pathlib import Path
 from langchain_core.prompts import ChatPromptTemplate
+import re
 
 
 class CVExtractor:
@@ -301,7 +303,8 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
             certifications=certification_result.certifications,
             spoken_languages=spoken_languages_result.spoken_languages,
         )
-
+        candidate_profile = populate_skill_evidence(candidate_profile)
+        candidate_profile = normalize_profile_skills(candidate_profile)
         # Cache the extracted profile
         cache_dir = Path("data/outputs")
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -312,3 +315,71 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
             f.write(candidate_profile.model_dump_json(indent=2))
         
         return candidate_profile
+
+def normalize_profile_skills(profile: CandidateProfile) -> CandidateProfile:
+    for skill in profile.skills:
+        skill.name = normalize_skill_name(skill.name)
+    return profile
+
+def populate_skill_evidence(profile: CandidateProfile) -> CandidateProfile:
+    """
+    For each skill, scan experience/project text for mentions and attach
+    the matching source lines as evidence. Runs after LLM extraction,
+    no inference involved — pure string matching against the candidate's
+    own stated history.
+    """
+    for skill in profile.skills:
+        evidence = _find_evidence_for_skill(skill.name, profile)
+        skill.evidence = evidence if evidence else None
+    return profile
+
+
+def _find_evidence_for_skill(skill_name: str, profile: CandidateProfile) -> list[str]:
+    pattern = re.compile(rf"\b{re.escape(skill_name)}\b", re.IGNORECASE)
+    evidence = []
+
+    for exp in profile.experience:
+        if any(t.lower() == skill_name.lower() for t in exp.technologies):
+            label = f"{exp.job_title} at {exp.company}" if exp.job_title and exp.company else (exp.job_title or exp.company or "Experience")
+            evidence.append(f"Used in role: {label}")
+
+        # description / responsibilities — text mentions
+        texts_to_scan = ([exp.description] if exp.description else []) + exp.responsibilities
+        for text in texts_to_scan:
+            if text and pattern.search(text):
+                snippet = _extract_snippet(text, pattern)
+                evidence.append(snippet)
+
+    for proj in profile.projects:
+        if any(t.lower() == skill_name.lower() for t in proj.technologies):
+            evidence.append(f"Used in project: {proj.title}" if proj.title else "Used in a project")
+
+        texts_to_scan = ([proj.summary] if proj.summary else []) + proj.highlights
+        for text in texts_to_scan:
+            if text and pattern.search(text):
+                snippet = _extract_snippet(text, pattern)
+                evidence.append(snippet)
+
+    # dedupe while preserving order
+    seen = set()
+    deduped = []
+    for e in evidence:
+        if e not in seen:
+            seen.add(e)
+            deduped.append(e)
+    return deduped
+
+
+def _extract_snippet(text: str, pattern: re.Pattern, context_chars: int = 60) -> str:
+    """Return a short window of text around the first match, not the whole paragraph."""
+    match = pattern.search(text)
+    if not match:
+        return text
+    start = max(0, match.start() - context_chars)
+    end = min(len(text), match.end() + context_chars)
+    snippet = text[start:end].strip()
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(text):
+        snippet = snippet + "…"
+    return snippet

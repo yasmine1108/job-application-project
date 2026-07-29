@@ -3,6 +3,9 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 import pytz
 
+from src.shared import DEGREE_LEVEL_GUIDANCE, normalize_skill_name
+
+
 
 class SkillCategory(str, Enum):
     PROGRAMMING_LANGUAGE = "programming_language"
@@ -21,12 +24,11 @@ class ImportanceLevel(str, Enum):
 
 class DegreeLevel(str, Enum):
     HIGH_SCHOOL = "high_school"
+    SHORT_CYCLE = "short_cycle"
     ASSOCIATE = "associate"
     BACHELOR = "bachelor"
     MASTER = "master"
     DOCTORATE = "doctorate"
-    BACCALAUREATE = "baccalaureat"
-    UNDERGRADUATE = "undergraduate"
     OTHER = "other"
 
 
@@ -38,19 +40,40 @@ class JobSkillRequirement(BaseModel):
 
 
 class EducationRequirement(BaseModel):
-    degree_level: DegreeLevel | None = None
+    degree_level: DegreeLevel | None = Field(
+        default=None,
+        description="Minimum level required" + DEGREE_LEVEL_GUIDANCE,
+    )
+    raw_requirement: str | None = Field(
+        default=None,
+        description="The literal degree text from the posting, e.g. 'Bac+5 ou école d'ingénieur, master en data science'.",
+    )
+    years_of_study: int | None = Field(
+        default=None,
+        description="Total years of post-secondary study required (e.g. Licence=3, Diplôme d'Ingénieur=5, BAC+5=5).",
+    )
     field_of_study: str | None = None
     importance: ImportanceLevel = ImportanceLevel.REQUIRED
 
 
 class CertificationRequirement(BaseModel):
-    name: str
+    name: str = Field(
+        description=(
+            "A professional certification ONLY — e.g. 'AWS Certified Solutions "
+            "Architect', 'PMP', 'Scrum Master'. Do NOT include academic degrees "
+            "here (Bachelor's, Master's, Diplôme d'Ingénieur, etc.) — those "
+            "belong exclusively in required_education, never here."
+        )
+    )
     importance: ImportanceLevel = ImportanceLevel.REQUIRED
 
 
 class LanguageRequirement(BaseModel):
-    name: str = Field(description="A spoken/human language required for the role, e.g. English, French. Not a programming language.")
-    min_proficiency: str | None = None  # e.g. "conversational", "fluent", "native"
+    name: str = Field(description="A spoken/human language required, e.g. English, French. Never a programming language.")
+    min_proficiency: str | None = Field(
+        default=None,
+        description="e.g. 'professional', 'fluent', 'native', 'conversational' — extracted from phrases like 'bon niveau', 'courant', 'niveau professionnel'.",
+    )
 
 class EmploymentType(str, Enum):
     FULL_TIME = "full-time"
@@ -92,6 +115,7 @@ class RawJob(BaseModel):
 
 class JobOfferInference(BaseModel):
     """LLM output — matches JobOffer's inferred fields 1:1."""
+    job_url:str | None = None
     skills: list[JobSkillRequirement] = Field(default_factory=list)
     required_experience: str | None = None
     min_years_experience: int | None = None
@@ -100,12 +124,16 @@ class JobOfferInference(BaseModel):
     required_certifications: list[CertificationRequirement] = Field(default_factory=list)
     description_language: str | None = None
 
+class JobOfferInferenceBatch(BaseModel):
+    results: list[JobOfferInference]
 
 class JobOffer(BaseModel):
     """Matching profile — only fields a scoring/ranking step needs."""
     job_url: str
     job_id: str | None = None
+    title : str | None = None
     description_language: str | None = None
+    location: str | None = None
 
     employment_type: EmploymentType | None = None
     work_arrangement: WorkArrangement | None = None
@@ -127,7 +155,9 @@ class JobOffer(BaseModel):
         return cls(
             job_url=raw_job.job_url,
             job_id=raw_job.job_id,
+            title = raw_job.title,
             description_language=job_inference.description_language,
+            location = raw_job.location,
             employment_type=EmploymentType(raw_job.employment_type) if raw_job.employment_type else None,
             work_arrangement=WorkArrangement(raw_job.work_arrangement) if raw_job.work_arrangement else None,
             skills=job_inference.skills,
@@ -138,3 +168,8 @@ class JobOffer(BaseModel):
             required_certifications=job_inference.required_certifications,
             easy_apply=raw_job.easy_apply,
         )
+
+def normalize_job_skills(inference: JobOfferInference) -> JobOfferInference:
+    for req in inference.skills:
+        req.name = normalize_skill_name(req.name)
+    return inference

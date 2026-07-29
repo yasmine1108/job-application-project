@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
-from agent_project.src.models_job import DegreeLevel, SkillCategory
+from src.shared import DEGREE_LEVEL_GUIDANCE
+from src.models_job import DegreeLevel, SkillCategory
 
 @dataclass
 class ParsedTable:
@@ -26,7 +27,15 @@ class PersonalInformation(BaseModel):
     github: str | None
 
 class Education(BaseModel):
-    degree: DegreeLevel | None
+    degree: str | None
+    degree_level: DegreeLevel | None = Field(
+        default=None,
+        description=DEGREE_LEVEL_GUIDANCE,
+    )
+    years_of_study: int | None = Field(
+        default=None,
+        description="Total years of post-secondary study to obtain this degree (e.g. Licence=3, Diplôme d'Ingénieur=5, BAC+5=5).",
+    )
     institution: str | None
     field_of_study: str | None
     start_date: str | None

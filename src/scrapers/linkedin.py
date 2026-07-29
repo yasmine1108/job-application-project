@@ -168,10 +168,10 @@ class LinkedInScraper(BaseScraper):
 
             for attribute in texts:
                 if attribute.lower() in self.WORK_ARRANGEMENTS:
-                    work_arrangement = attribute
+                    work_arrangement = attribute.lower()
 
                 if attribute.lower() in self.EMPLOYMENT_TYPES:
-                    employment_type = attribute
+                    employment_type = attribute.lower()
 
             job_offer.work_arrangement = work_arrangement
             job_offer.employment_type = employment_type
