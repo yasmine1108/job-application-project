@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 import pytz
 
@@ -173,3 +174,4 @@ def normalize_job_skills(inference: JobOfferInference) -> JobOfferInference:
     for req in inference.skills:
         req.name = normalize_skill_name(req.name)
     return inference
+

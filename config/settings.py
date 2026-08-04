@@ -10,3 +10,5 @@ class Settings:
     LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD", "")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL_NAME = "gemini-3.5-flash"
+    GROQ_API_KEY: str = os.environ["GROQ_API_KEY"]
+    GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"

@@ -1,5 +1,5 @@
 import re
-
+from rapidfuzz import process, fuzz
 
 DEGREE_LEVEL_GUIDANCE = (
     "Normalize by total years of post-secondary study, NOT by literal degree "
@@ -35,4 +35,20 @@ def normalize_skill_name(raw_name: str) -> str:
     """Map a raw skill string to its canonical form. Falls back to a cleaned
     version of the original if no alias is known."""
     cleaned = re.sub(r"\s+", " ", raw_name.strip().lower())
-    return _ALIAS_TO_CANONICAL.get(cleaned, raw_name.strip())
+
+    if cleaned in _ALIAS_TO_CANONICAL:
+        return _ALIAS_TO_CANONICAL[cleaned]
+
+    match = process.extractOne(cleaned, SKILL_ALIASES.keys(), scorer=fuzz.ratio)
+    if match and match[1] >= 92:
+        return match[0]
+
+    return raw_name.strip()
+
+DIMENSION_WEIGHTS = {
+    "skills": 0.40,
+    "education": 0.15,
+    "experience": 0.25,
+    "work_arrangement": 0.10,
+    "employment_type": 0.10,
+}
