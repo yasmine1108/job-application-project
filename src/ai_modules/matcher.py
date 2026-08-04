@@ -20,8 +20,88 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from src.llm.fallback import FallbackLLM
-from src.models import MatchingProfile
-from src.models_job import ApplicationStatus, JobOffer, RawJob
+from src.models import MatchingProfile, SpokenLanguage
+from src.models_job import ApplicationStatus, EmploymentType, JobOffer, RawJob, WorkArrangement
+import math
+
+# approximate centroid coordinates (lat, lon) for each Tunisian governorate
+TUNISIA_GOVERNORATE_COORDS: dict[str, tuple[float, float]] = {
+    "tunis": (36.8065, 10.1815),
+    "ariana": (36.8625, 10.1956),
+    "ben arous": (36.7533, 10.2189),
+    "manouba": (36.8081, 10.0972),
+    "nabeul": (36.4561, 10.7376),
+    "zaghouan": (36.4028, 10.1425),
+    "bizerte": (37.2744, 9.8739),
+    "beja": (36.7256, 9.1817),
+    "jendouba": (36.5011, 8.7803),
+    "kef": (36.1742, 8.7049),
+    "siliana": (36.0847, 9.3708),
+    "kairouan": (35.6781, 10.0963),
+    "kasserine": (35.1676, 8.8365),
+    "sidi bouzid": (35.0381, 9.4858),
+    "sousse": (35.8256, 10.6084),
+    "monastir": (35.7780, 10.8262),
+    "mahdia": (35.5047, 11.0622),
+    "sfax": (34.7406, 10.7603),
+    "gafsa": (34.4250, 8.7842),
+    "tozeur": (33.9197, 8.1335),
+    "kebili": (33.7044, 8.9690),
+    "gabes": (33.8815, 10.0982),
+    "medenine": (33.3549, 10.5055),
+    "tataouine": (32.9297, 10.4518),
+}
+
+
+def haversine_km(coord1: tuple[float, float], coord2: tuple[float, float]) -> float:
+    lat1, lon1 = coord1
+    lat2, lon2 = coord2
+    R = 6371  # Earth radius in km
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def governorate_distance_km(gov_a: str, gov_b: str) -> float | None:
+    a = TUNISIA_GOVERNORATE_COORDS.get(gov_a.strip().lower())
+    b = TUNISIA_GOVERNORATE_COORDS.get(gov_b.strip().lower())
+    if a is None or b is None:
+        return None
+    return haversine_km(a, b)
+
+def parse_job_location(location: str | None) -> tuple[str | None, str | None]:
+    """Returns (governorate, country), best-effort from a 'City, Governorate, Country' string."""
+    if not location:
+        return None, None
+    parts = [p.strip() for p in location.split(",")]
+    if len(parts) >= 2:
+        return parts[-2], parts[-1]
+    return None, parts[-1] if parts else None
+
+PROFICIENCY_RANK = {
+    "basic": 1,
+    "conversational": 2,
+    "professional": 3,
+    "fluent": 4,
+    "native": 5,
+}
+ADVANCED_PROFICIENCY_THRESHOLD = PROFICIENCY_RANK["fluent"]  # "fluent" or "native" required = advanced
+
+
+def proficiency_rank(level: str | None) -> int:
+    if not level:
+        return 0
+    return PROFICIENCY_RANK.get(level.strip().lower(), 0)
+
+class CandidatePreferences(BaseModel):
+    preferred_employment_types: list[EmploymentType] = Field(default_factory=list)  # empty = no restriction
+    preferred_work_arrangements: list[WorkArrangement] = Field(default_factory=list)
+    willing_to_relocate: bool = False
+    country: str
+    governorate: str | None = None
+    max_commute_distance_km: float | None = None  # None = no distance restriction
 
 
 # ---------------------------------------------------------------------------
@@ -93,18 +173,77 @@ def compute_apply_priority(overall_score: float, easy_apply: bool) -> float:
 # Hard filters — deterministic, run before any LLM call
 # ---------------------------------------------------------------------------
 
-def apply_hard_filters(job: JobOffer, candidate_langs: list[str]) -> str | None:
-    """Returns a rejection reason, or None if the job should be scored."""
+COMMON_LANGUAGES = {"french", "français", "english", "anglais"}
+
+
+def apply_hard_filters(
+    job: JobOffer,
+    candidate_langs: list[SpokenLanguage],
+    preferences: CandidatePreferences,
+) -> str | None:
     if job.application_status == ApplicationStatus.CLOSED:
         return "Job is no longer accepting applications"
 
     if job.application_status != ApplicationStatus.NOT_APPLIED:
         return f"Already in status: {job.application_status.value}"
 
-    # required_lang_names = {l.name.lower() for l in job.required_languages}
-    # candidate_lang_names = {l.lower() for l in candidate_langs}
-    # if required_lang_names and not required_lang_names & candidate_lang_names:
-    #     return f"Missing required language(s): {sorted(required_lang_names)}"
+    # --- employment type preference ---
+    if (
+        preferences.preferred_employment_types
+        and job.employment_type
+        and job.employment_type not in preferences.preferred_employment_types
+    ):
+        return f"Employment type {job.employment_type.value} not in candidate's preferences"
+
+    # --- work arrangement preference ---
+    if (
+        preferences.preferred_work_arrangements
+        and job.work_arrangement
+        and job.work_arrangement not in preferences.preferred_work_arrangements
+    ):
+        return f"Work arrangement {job.work_arrangement.value} not in candidate's preferences"
+
+    # --- relocation check: on-site job abroad, candidate won't relocate ---
+    job_governorate, job_country = parse_job_location(job.location if hasattr(job, "location") else None)
+    if (
+        job.work_arrangement == WorkArrangement.ON_SITE
+        and job_country
+        and job_country.strip().lower() != preferences.country.strip().lower()
+        and not preferences.willing_to_relocate
+    ):
+        return f"On-site job in {job_country}, candidate not willing to relocate"
+
+    # --- optional distance filter: same country, different governorate ---
+    if (
+        preferences.max_commute_distance_km is not None
+        and job.work_arrangement == WorkArrangement.ON_SITE
+        and job_country
+        and job_country.strip().lower() == preferences.country.strip().lower()
+        and job_governorate
+        and preferences.governorate
+    ):
+        distance = governorate_distance_km(job_governorate, preferences.governorate)
+        if distance is not None and distance > preferences.max_commute_distance_km:
+            return f"On-site job {distance:.0f}km away exceeds max commute of {preferences.max_commute_distance_km}km"
+
+    # --- spoken language requirements ---
+    candidate_lang_map = {l.name.strip().lower(): l.proficiency for l in candidate_langs}
+    for req in job.required_languages:
+        req_name = req.name.strip().lower()
+        req_rank = proficiency_rank(req.min_proficiency)
+
+        if req_name not in COMMON_LANGUAGES:
+            # non fr/en language required — reject unless candidate explicitly has it
+            if req_name not in candidate_lang_map:
+                return f"Missing required language: {req.name}"
+            continue
+
+        # fr/en: only enforce if job explicitly demands an advanced level
+        if req_rank >= ADVANCED_PROFICIENCY_THRESHOLD:
+            candidate_level = candidate_lang_map.get(req_name)
+            candidate_rank = proficiency_rank(candidate_level)
+            if candidate_rank < req_rank:
+                return f"Required {req.name} at '{req.min_proficiency}' level, candidate has '{candidate_level or 'unspecified'}'"
 
     return None
 

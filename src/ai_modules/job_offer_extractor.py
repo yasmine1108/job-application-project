@@ -42,6 +42,17 @@ class GeminiJobExtractor:
     "belong exclusively in required_education. A certification is a "
     "professional credential (AWS Certified, PMP), never a degree.\n\n"
     "Do not confuse programming languages with spoken languages.\n\n"
+    "LOCATION: most jobs include a 'Location:' field extracted by the scraper "
+    "— when present and it looks like a real place (city/region/country), "
+    "leave the 'location' output field null; the scraped value will be used "
+    "as-is and you do not need to repeat it.\n"
+    "Some jobs are marked 'Location: NEEDS_EXTRACTION' — this means the "
+    "scraper failed to capture a valid location. For ONLY these jobs, read "
+    "the full description and extract the actual work location (city/region/"
+    "country) if it is stated anywhere in the text. If the description does "
+    "not mention a location at all, leave the 'location' output field null "
+    "— do not guess or infer a location from unrelated context (e.g. company "
+    "headquarters mentioned in passing is not necessarily the job location).\n\n"
     "Do not invent information not present or reasonably implied. If a field "
     "cannot be determined, omit it or leave its list empty."
 )
@@ -68,14 +79,28 @@ class GeminiJobExtractor:
         batch = JobOfferInferenceBatch.model_validate(json.loads(response.text))
         return {item.job_url: item for item in batch.results}
 
+    def _needs_location_extraction(self, job: RawJob) -> bool:
+        """Location is missing, or the scraper mistakenly copied the title
+        into the location field (a known scraping bug)."""
+        if not job.location or not job.location.strip():
+            return True
+        if job.title and job.location.strip().lower() == job.title.strip().lower():
+            return True
+        return False
+
     def _build_batch_prompt(self, raw_jobs: list[RawJob]) -> str:
         parts = []
         for job in raw_jobs:
+            location_line = (
+                "Location: NEEDS_EXTRACTION"
+                if self._needs_location_extraction(job)
+                else f"Location: {job.location}"
+            )
             parts.append(
                 f"job_url: {job.job_url}\n"
                 f"Title: {job.title or 'N/A'}\n"
                 f"Company: {job.company or 'N/A'}\n"
-                f"Location: {job.location or 'N/A'}\n"
+                f"{location_line}\n"
                 f"Description:\n{job.description or ''}\n"
                 f"---"
             )
@@ -85,12 +110,23 @@ class GeminiJobExtractor:
         with self.input_path.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
 
-        raw_jobs = [RawJob(**item) if isinstance(item, dict) else item for item in payload]
+        all_raw_jobs = [RawJob(**item) if isinstance(item, dict) else item for item in payload]
 
         # resume support: skip jobs already extracted in a previous run
         structured_jobs = self._load_existing_jobs()
         already_done = {job.job_url for job in structured_jobs}
-        raw_jobs = [j for j in raw_jobs if j.job_url not in already_done]
+
+        # closed jobs can never be matched/applied to — skip the LLM entirely
+        closed_count = sum(
+            1 for j in all_raw_jobs
+            if j.job_url not in already_done and not j.accepting_applications
+        )
+        raw_jobs = [
+            j for j in all_raw_jobs
+            if j.job_url not in already_done and j.accepting_applications
+        ]
+        if closed_count:
+            print(f"Skipping {closed_count} job(s) no longer accepting applications.")
 
         for i in range(0, len(raw_jobs), self.BATCH_SIZE):
             chunk = raw_jobs[i:i + self.BATCH_SIZE]
@@ -106,12 +142,20 @@ class GeminiJobExtractor:
                 if inference is None:
                     print(f"WARNING: no result for {raw_job.job_url}, skipping")
                     continue
-                structured_jobs.append(JobOffer.from_raw_and_inference(raw_job, inference))
+                structured_jobs.append(self._build_job_offer(raw_job, inference))
 
             # write after every successful chunk, not just at the end
             self._write_jobs(self.output_path, structured_jobs)
 
         return structured_jobs
+
+    def _build_job_offer(self, raw_job: RawJob, inference: JobOfferInference) -> JobOffer:
+        """Reconcile location: prefer the LLM's extracted location only when
+        the scraped one was flagged as missing/bad; otherwise keep the
+        scraper's value untouched."""
+        if self._needs_location_extraction(raw_job) and inference.location:
+            raw_job = raw_job.model_copy(update={"location": inference.location})
+        return JobOffer.from_raw_and_inference(raw_job, inference)
 
     def _load_existing_jobs(self) -> list[JobOffer]:
         if not self.output_path.exists():

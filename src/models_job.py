@@ -117,6 +117,7 @@ class RawJob(BaseModel):
 class JobOfferInference(BaseModel):
     """LLM output — matches JobOffer's inferred fields 1:1."""
     job_url:str | None = None
+    location: str | None = None  # only meaningfully populated when the raw location was bad/missing
     skills: list[JobSkillRequirement] = Field(default_factory=list)
     required_experience: str | None = None
     min_years_experience: int | None = None
