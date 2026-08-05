@@ -27,8 +27,9 @@ if __name__ == "__main__":
 
     tanitjobs_scraper = TanitJobsScraper()
     tanitjobs_scraper.start_browser()
-    tanitjobs_scraper.ensure_logged_in()
-    tanitjobs_scraper.search_and_collect_links("data engineer")
+    # tanitjobs_scraper.ensure_logged_in()
+    # tanitjobs_scraper.search_and_collect_links("data engineer")
+    tanitjobs_scraper.extract_job_list()
     tanitjobs_scraper.close_browser()
 
     # cv_parser = CVParser("example_cv.pdf")

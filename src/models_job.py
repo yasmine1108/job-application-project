@@ -109,6 +109,7 @@ class RawJob(BaseModel):
     employment_type: str | None = None   
     work_arrangement: str | None = None  
     accepting_applications: bool = True
+    expiration_date: str | None = None 
     job_url: str | None = None
     job_id: str | None = None
     easy_apply: bool = False

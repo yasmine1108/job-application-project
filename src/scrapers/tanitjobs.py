@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import date, datetime
 
 from src.scrapers.base_scraper import BaseScraper
 from config.settings import Settings
@@ -30,10 +31,22 @@ class TanitJobsScraper(BaseScraper):
         self.page.locator("xpath=/html/body/div[4]/div/div[1]/div[1]/div/form/div[1]/input").fill(self.email)
         self.page.locator("xpath=/html/body/div[4]/div/div[1]/div[1]/div/form/div[2]/input").fill(self.password)
         self.page.locator("xpath=/html/body/div[4]/div/div[1]/div[1]/div/form/table/tbody/tr/td[1]/div/input").click()
-        cookies = self.sb.get_all_cookies()  # or self.page.context.cookies() via Playwright
+        cookies = self.page.context.cookies()  
         for c in cookies:
             print(c.get("name"), c.get("expires"))
         self.sb.sleep(5)
+
+    def _is_still_open(self, expiration_date: str | None) -> bool:
+        """Return True when the posting is still open compared with today's date."""
+        if not expiration_date or not expiration_date.strip():
+            return True
+
+        today = date.today()
+        try:
+            parsed_date = datetime.strptime(expiration_date.strip(), "%d/%m/%Y").date()
+            return parsed_date >= today
+        except ValueError:
+            return True
 
     def search_and_collect_links(self, keyword):
         logo_link = self.page.locator("a[href='https://www.tanitjobs.com']")
@@ -116,35 +129,56 @@ class TanitJobsScraper(BaseScraper):
         print(f"Sauvegarde terminée. Total général : {len(existing)} offres ({added} ajoutées).")
 
     def extract_job_list(self):
-        """Extract job details from the collected job links and save them to a JSON file."""
-        if not os.path.exists(self.output_file) or os.path.getsize(self.output_file) == 0:
-            print("No job links found. Please run search_and_collect_links first.")
-            return []
-
         with open(self.output_file, "r", encoding="utf-8") as f:
-            job_links = json.load(f)
+            cards = json.load(f)
 
-        jobs = []
-        for link in job_links:
-            self.sb.sleep(5)
-            self.page.goto(link["job_url"])
+        details_file = "data/outputs/tanitjobs_raw_job_list.json"
+        existing = []
+        if os.path.exists(details_file) and os.path.getsize(details_file) > 0:
+            with open(details_file, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        done_urls = {item["job_url"] for item in existing}
 
-            job_offer = self._extract_via_dom()
-            job_offer.job_url = link["job_url"]
-            job_offer.job_id = link["job_id"]
-            locator = self.page.get_by_text(
-                "No longer accepting applications",
-                exact=False
-            )
-            if locator.count() > 0:
-                job_offer.accepting_applications = False
+        for card in cards:
+            if card["job_url"] in done_urls:
+                continue
+            self.sb.sleep(3)
+            details = self.extract_job_details(card["job_url"])
+            existing.append({**card, **details})
 
-            jobs.append(job_offer.model_dump())
+            os.makedirs(os.path.dirname(details_file), exist_ok=True)
+            with open(details_file, "w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=4, ensure_ascii=False)
 
-        jobs_output_file = "data/outputs/tanitjobs_raw_job_list.json"
-        os.makedirs(os.path.dirname(jobs_output_file), exist_ok=True)
-        with open(jobs_output_file, "w", encoding="utf-8") as f:
-            json.dump(jobs, f, indent=4, ensure_ascii=False)
+        return existing
 
-        print(f"Extraction terminée. Total de jobs extraits : {len(jobs)}")
-        return jobs
+    def extract_job_details(self, job_url: str) -> dict:
+        self.page.goto(job_url,wait_until="domcontentloaded", timeout=30000)
+        self.sb.sleep(3)
+
+        headings = self.page.locator("h3.details-body__title")
+        contents = self.page.locator("div.details-body__content.content-text")
+
+        heading_count = headings.count()
+        content_count = contents.count()
+
+        if heading_count != content_count:
+            print(f"WARNING: {job_url} has {heading_count} headings but {content_count} content divs — structure mismatch")
+
+        sections: dict[str, str] = {}
+        for i in range(min(heading_count, content_count)):
+            heading_text = headings.nth(i).inner_text().strip()
+            content_text = contents.nth(i).inner_text().strip()
+            sections[heading_text] = content_text
+
+        description = sections.get("Description de l'emploi", "")
+        requirements = sections.get("Exigences de l'emploi", "")
+        expiration_raw = sections.get("Date d'expiration")
+
+        full_description = "\n\n".join(part for part in [description, requirements] if part)
+
+        return {
+            "description": full_description,
+            "expiration_date": expiration_raw,
+            "accepting_applications": self._is_still_open(expiration_raw),
+        }
