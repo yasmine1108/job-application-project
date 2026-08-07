@@ -18,4 +18,8 @@ class FallbackLLM:
                 last_error = e
                 if e.is_rate_limit:
                     entry["blocked_until"] = time.time() + 60
+                    print(f"{entry['provider'].name} unavailable/rate-limited, falling back...")
+                    print(f"{entry['provider'].name} Last error:", e)
+                else:
+                    print(f"{entry['provider'].name} failed (non-rate-limit): {e}")
         raise RuntimeError(f"All LLM providers exhausted. Last error: {last_error}")

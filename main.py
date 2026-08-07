@@ -1,9 +1,13 @@
 # from src.data_helpers import get_job_offer_by_id, get_raw_job_by_id, load_matching_profile_from_example
 # from src.matchers.matcher import Matcher
-# from src.ai_modules.job_offer_extractor import GeminiJobExtractor
+from config.settings import Settings
+from src.llm.fallback import FallbackLLM
+from src.llm.gemini_provider import GeminiProvider
+from src.llm.groq_provider import GroqProvider
+from src.ai_modules.job_offer_extractor import JobOfferExtractor
 # from src.ai_modules.cv_extractor import CVExtractor
 # from src.ai_modules.cv_parser import CVParser
-from src.scrapers.tanitjobs import TanitJobsScraper
+# from src.scrapers.tanitjobs import TanitJobsScraper
 # from src.scrapers.linkedin import LinkedInScraper
 
 # from langchain_ollama import ChatOllama
@@ -25,20 +29,34 @@ if __name__ == "__main__":
     # bot_linkedin.close_browser()
 
 
-    tanitjobs_scraper = TanitJobsScraper()
-    tanitjobs_scraper.start_browser()
+    # tanitjobs_scraper = TanitJobsScraper()
+    # tanitjobs_scraper.start_browser()
     # tanitjobs_scraper.ensure_logged_in()
     # tanitjobs_scraper.search_and_collect_links("data engineer")
-    tanitjobs_scraper.extract_job_list()
-    tanitjobs_scraper.close_browser()
+    # tanitjobs_scraper.extract_job_list()
+    # tanitjobs_scraper.close_browser()
 
     # cv_parser = CVParser("example_cv.pdf")
     # document = cv_parser.extract_text()
     # extractor = CVExtractor(llm=llm, debug=False)
     # candidate = extractor.extract(document)
 
-    # job_extractor = GeminiJobExtractor()
-    # job_extractor.extract_jobs_from_file()   
+    if not Settings.GEMINI_API_KEY and not Settings.GROQ_API_KEY:
+        raise RuntimeError("No API key configured. Set GEMINI_API_KEY and/or GROQ_API_KEY in your environment before running the extractor.")
+
+    fallback_llm = FallbackLLM([
+        GeminiProvider(Settings.GEMINI_API_KEY, "gemini-3.5-flash"),
+        GeminiProvider(Settings.GEMINI_API_KEY, "gemini-3.5-flash-lite"),
+        GroqProvider(Settings.GROQ_API_KEY, "openai/gpt-oss-120b"),
+        GroqProvider(Settings.GROQ_API_KEY, "openai/gpt-oss-20b"),
+    ])
+    job_extractor = JobOfferExtractor(
+        llm=fallback_llm,
+        input_path="data/outputs/tanitjobs_raw_job_list.json",
+        output_path="data/outputs/tanitjobs_structured_jobs.json",
+        batch_size=8,
+    )
+    job_extractor.extract_jobs_from_file()
 
     # job_offer = get_job_offer_by_id("4413017677")
     # raw_job = get_raw_job_by_id("4413017677")

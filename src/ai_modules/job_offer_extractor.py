@@ -2,19 +2,11 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-
-from google import genai
-from google.genai import types
-
-from config.settings import Settings
+from src.llm.fallback import FallbackLLM
 from src.models_job import JobOfferInferenceBatch, RawJob, JobOfferInference, JobOffer
 
 
-class GeminiJobExtractor:
-    MODEL_NAME = Settings.GEMINI_MODEL_NAME
-    BATCH_SIZE = 10 
-
-    SYSTEM_PROMPT = (
+SYSTEM_PROMPT = (
     "You are an exhaustive information extraction system. You will be given a "
     "raw job posting. Extract structured attributes per the response schema.\n\n"
     "CRITICAL: Be exhaustive, not selective. Job descriptions in French/English "
@@ -56,27 +48,21 @@ class GeminiJobExtractor:
     "Do not invent information not present or reasonably implied. If a field "
     "cannot be determined, omit it or leave its list empty."
 )
-    def __init__(self):
-        api_key = Settings.GEMINI_API_KEY
-        self.client = genai.Client(api_key=api_key)
-        self.input_path = Path("data/outputs/linkedin_raw_job_list.json")
-        self.output_path = Path("data/outputs/linkedin_structured_jobs.json")
+
+
+class JobOfferExtractor:
+    """Provider-agnostic extractor. Which model(s) actually run this is
+    entirely decided by the FallbackLLM passed in"""
+
+    def __init__(self, llm: FallbackLLM, input_path: str | Path, output_path: str | Path, batch_size: int = 10):
+        self.llm = llm
+        self.input_path = Path(input_path)
+        self.output_path = Path(output_path)
+        self.batch_size = batch_size
 
     def extract_batch(self, raw_jobs: list[RawJob]) -> dict[str, JobOfferInference]:
         prompt = self._build_batch_prompt(raw_jobs)
-
-        response = self.client.models.generate_content(
-            model=self.MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=self.SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=JobOfferInferenceBatch,
-                temperature=0,
-            ),
-        )
-
-        batch = JobOfferInferenceBatch.model_validate(json.loads(response.text))
+        batch = self.llm.generate_structured(SYSTEM_PROMPT, prompt, JobOfferInferenceBatch)
         return {item.job_url: item for item in batch.results}
 
     def _needs_location_extraction(self, job: RawJob) -> bool:
@@ -128,8 +114,8 @@ class GeminiJobExtractor:
         if closed_count:
             print(f"Skipping {closed_count} job(s) no longer accepting applications.")
 
-        for i in range(0, len(raw_jobs), self.BATCH_SIZE):
-            chunk = raw_jobs[i:i + self.BATCH_SIZE]
+        for i in range(0, len(raw_jobs), self.batch_size):
+            chunk = raw_jobs[i:i + self.batch_size]
             try:
                 results_by_url = self.extract_batch(chunk)
             except Exception as e:

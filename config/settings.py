@@ -12,3 +12,5 @@ class Settings:
     GEMINI_MODEL_NAME = "gemini-3.5-flash"
     GROQ_API_KEY: str = os.environ["GROQ_API_KEY"]
     GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"
+    CEREBRAS_API_KEY: str = os.environ["CEREBRAS_API_KEY"]
+    CEREBRAS_MODEL_NAME: str = "gpt-oss-120b"

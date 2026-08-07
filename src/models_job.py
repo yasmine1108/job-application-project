@@ -83,6 +83,7 @@ class EmploymentType(str, Enum):
     INTERNSHIP = "internship"
     TEMPORARY = "temporary"
     VOLUNTEER = "volunteer"
+    CDI = "CDI"
     OTHER = "other"
 
 
@@ -106,7 +107,8 @@ class RawJob(BaseModel):
     location: str | None = None
     description: str | None = None
     date_posted: str | None = None
-    employment_type: str | None = None   
+    employment_type: str | None = None 
+    raw_employment_type: str | None = None   
     work_arrangement: str | None = None  
     accepting_applications: bool = True
     expiration_date: str | None = None 

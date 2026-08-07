@@ -17,3 +17,21 @@ class BaseLLMProvider(ABC):
         """Single generic entrypoint. Used for extraction AND matching —
         callers just pass a different schema/prompt."""
         ...
+
+    def _is_rate_limit(self, e: Exception) -> bool:
+        """Shared heuristic: treat quota errors AND transient server-side
+        overload (503/UNAVAILABLE) the same way — both mean 'try the next provider and back this one off for a bit'"""
+        msg = str(e).lower()
+        return any(
+            token in msg
+            for token in (
+                "429",
+                "resource_exhausted",
+                "quota",
+                "rate limit",
+                "503",
+                "unavailable",
+                "overloaded",
+                "high demand",
+            )
+        )

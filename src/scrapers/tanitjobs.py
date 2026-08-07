@@ -5,6 +5,58 @@ from datetime import date, datetime
 from src.scrapers.base_scraper import BaseScraper
 from config.settings import Settings
 
+import unicodedata
+
+EMPLOYMENT_TYPE_TRANSLATIONS: dict[str, str] = {
+    "temps plein": "full-time",
+    "cdi": "full-time",        # permanent contract — closest enum fit
+    "cdd": "contract",         # fixed-term contract (not seen yet, but will show up)
+    "stage": "internship",
+    "sivp": "internship",      # subsidized grad integration program — closest fit, raw string preserved separately
+    "intérim": "temporary",
+    "temps partiel": "part-time",
+    "freelance": "contract",
+    "alternance": "internship",
+}
+
+
+def _strip_accents(text: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
+def translate_employment_type(raw: str | None) -> tuple[str | None, str | None]:
+    """Returns (normalized_enum_value, raw_original). Unknown types fall
+    back to 'other' rather than crashing on EmploymentType(...) later,
+    but the raw string is always preserved regardless."""
+    if not raw or not raw.strip():
+        return None, None
+
+    key = _strip_accents(raw.strip().lower())
+    normalized = EMPLOYMENT_TYPE_TRANSLATIONS.get(key)
+
+    if normalized is None:
+        print(f"WARNING: unrecognized employment type '{raw}', defaulting to 'other'")
+        normalized = "other"
+
+    return normalized, raw.strip()
+
+WORK_ARRANGEMENT_REMOTE_KEYWORDS = {"remote", "teletravail", "100 remote"}
+WORK_ARRANGEMENT_HYBRID_KEYWORDS = {"hybride", "hybrid"}  # not confirmed present yet, but cheap to guard for
+
+
+def infer_work_arrangement(location: str | None,title: str | None) -> str:
+    if not location:
+        return "on-site"
+
+    normalized_location = _strip_accents(location.strip().lower())
+    normalized_title = _strip_accents(title.strip().lower()) if title else None
+
+    if any(kw in normalized_location for kw in WORK_ARRANGEMENT_HYBRID_KEYWORDS) or (normalized_title and any(kw in normalized_title for kw in WORK_ARRANGEMENT_HYBRID_KEYWORDS)):
+        return "hybrid"
+    if any(kw in normalized_location for kw in WORK_ARRANGEMENT_REMOTE_KEYWORDS) or (normalized_title and any(kw in normalized_title for kw in WORK_ARRANGEMENT_REMOTE_KEYWORDS)):
+        return "remote"
+    return "on-site"
+
 class TanitJobsScraper(BaseScraper):
     def __init__(self):
         super().__init__(base_url="http://www.tanitjobs.com/")
@@ -78,7 +130,9 @@ class TanitJobsScraper(BaseScraper):
             title = self._safe_text(lambda: card.locator("div.sj-card-title a").first)
             company = self._safe_text(lambda: card.locator("div.sj-card-company a").first)
             location = self._safe_text(lambda: card.locator("span.sj-loc").first)
-            employment_type = self._safe_text(lambda: card.locator("span.sj-type").first)
+            raw_employment_type = self._safe_text(lambda: card.locator("span.sj-type").first)
+            employment_type, raw_type_preserved = translate_employment_type(raw_employment_type)
+            work_arrangement = infer_work_arrangement(location,title)
             date_posted = self._safe_text(lambda: card.locator("span.sj-card-date").first)
 
             collected.append({
@@ -88,8 +142,11 @@ class TanitJobsScraper(BaseScraper):
                 "company": company,
                 "location": location,
                 "employment_type": employment_type,
+                "raw_employment_type": raw_type_preserved,
+                "work_arrangement": work_arrangement,
                 "date_posted": date_posted,
             })
+
 
         print(f"Total de cartes collectées : {len(collected)}")
         self._merge_and_save(collected)

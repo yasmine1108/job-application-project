@@ -8,9 +8,10 @@ from src.llm.base import BaseLLMProvider, LLMProviderError
 class GeminiProvider(BaseLLMProvider):
     name = "gemini"
 
-    def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str, model_name: str = "gemini-3.5-flash"):
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
+        self.name = f"gemini:{model_name}"
 
     def generate_structured(self, system_prompt, user_prompt, response_schema):
         try:
@@ -27,7 +28,3 @@ class GeminiProvider(BaseLLMProvider):
         except Exception as e:
             raise LLMProviderError(str(e), is_rate_limit=self._is_rate_limit(e)) from e
         return response_schema.model_validate(json.loads(response.text))
-
-    def _is_rate_limit(self, e):
-        msg = str(e).lower()
-        return "429" in msg or "resource_exhausted" in msg or "quota" in msg
