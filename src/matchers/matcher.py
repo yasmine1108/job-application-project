@@ -19,6 +19,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from src.matchers.country_normalize import normalize_country
 from src.llm.fallback import FallbackLLM
 from src.models import MatchingProfile, SpokenLanguage
 from src.models_job import ApplicationStatus, EmploymentType, JobOffer, RawJob, WorkArrangement
@@ -116,7 +117,9 @@ class DimensionJudgment(BaseModel):
 
 
 class MatchJudgment(BaseModel):
-    job_url: str
+    job_id: str = Field(
+        description="The job_id value given for this job in the prompt. Echo it back exactly, unchanged."
+    )
     skills_fit: DimensionJudgment
     experience_fit: DimensionJudgment
     education_fit: DimensionJudgment
@@ -204,21 +207,26 @@ def apply_hard_filters(
         return f"Work arrangement {job.work_arrangement.value} not in candidate's preferences"
 
     # --- relocation check: on-site job abroad, candidate won't relocate ---
-    job_governorate, job_country = parse_job_location(job.location if hasattr(job, "location") else None)
+    job_governorate, job_country_raw = parse_job_location(job.location)
+
+    job_country_code = normalize_country(job_country_raw)
+    preference_country_code = normalize_country(preferences.country)
+
     if (
         job.work_arrangement == WorkArrangement.ON_SITE
-        and job_country
-        and job_country.strip().lower() != preferences.country.strip().lower()
+        and job_country_code
+        and preference_country_code
+        and job_country_code != preference_country_code
         and not preferences.willing_to_relocate
     ):
-        return f"On-site job in {job_country}, candidate not willing to relocate"
+        return f"On-site job in {job_country_raw}, candidate not willing to relocate"
 
     # --- optional distance filter: same country, different governorate ---
     if (
         preferences.max_commute_distance_km is not None
         and job.work_arrangement == WorkArrangement.ON_SITE
-        and job_country
-        and job_country.strip().lower() == preferences.country.strip().lower()
+        and job_country_code and preference_country_code
+        and job_country_code == preference_country_code
         and job_governorate
         and preferences.governorate
     ):
@@ -254,6 +262,7 @@ def apply_hard_filters(
 
 class JobForMatching(BaseModel):
     job_url: str
+    job_id: str
     structured: JobOffer
     raw_description: str
 
@@ -285,7 +294,11 @@ MATCH_SYSTEM_PROMPT = (
     "level/field.\n\n"
     "Do not invent skills, experience, or education not evidenced in either "
     "the structured data or the raw text.\n\n"
-    "Return exactly one result per input job, echoing its job_url exactly."
+    "Each job is labeled with a job_id (a short alphanumeric string). Return "
+    "exactly one result per input job, with job_id set to the exact value "
+    "given for that job — do not alter, re-derive, guess, or attempt to "
+    "reproduce the job's URL or title as an identifier; job_id is the only "
+    "identifier needed."
 )
 
 
@@ -294,7 +307,7 @@ def build_match_prompt(candidate: MatchingProfile, jobs_for_matching: list[JobFo
     jobs_blocks = []
     for j in jobs_for_matching:
         jobs_blocks.append(
-            f"job_url: {j.job_url}\n"
+            f"job_id: {j.job_id}\n"
             f"STRUCTURED DATA:\n{j.structured.model_dump_json(indent=2)}\n\n"
             f"RAW JOB DESCRIPTION (use this for nuance, especially soft "
             f"skills/culture — the structured skill list may be incomplete "
@@ -320,12 +333,23 @@ class Matcher:
         self.batch_size = batch_size
 
     def match_batch(
-        self, candidate: MatchingProfile, jobs_for_matching: list[JobForMatching]
-    ) -> dict[str, MatchJudgment]:
-        prompt = build_match_prompt(candidate, jobs_for_matching)
-        batch = self.llm.generate_structured(MATCH_SYSTEM_PROMPT, prompt, MatchJudgmentBatch)
-        return {r.job_url: r for r in batch.results}
+            self, candidate: MatchingProfile, jobs_for_matching: list[JobForMatching]
+        ) -> dict[str, MatchJudgment]:
+            prompt = build_match_prompt(candidate, jobs_for_matching)
+            batch = self.llm.generate_structured(MATCH_SYSTEM_PROMPT, prompt, MatchJudgmentBatch)
 
+            url_by_job_id = {j.job_id: j.job_url for j in jobs_for_matching}
+            if len(url_by_job_id) != len(jobs_for_matching):
+                print("WARNING: duplicate job_id values in this batch — job_id lookup may be unreliable, check upstream extraction")
+
+            results_by_url: dict[str, MatchJudgment] = {}
+            for r in batch.results:
+                job_url = url_by_job_id.get(r.job_id)
+                if job_url is None:
+                    print(f"WARNING: LLM returned unknown job_id {r.job_id!r} (not in this batch), skipping")
+                    continue
+                results_by_url[job_url] = r
+            return results_by_url
     def run(
         self,
         candidate_id: str,
@@ -333,6 +357,7 @@ class Matcher:
         candidate_langs: list[str],
         jobs: list[JobOffer],
         raw_jobs_by_url: dict[str, RawJob],
+        preferences: CandidatePreferences,
     ) -> list[MatchResult]:
         results, rejected = self._load_existing(candidate_id)
         already_done = {r.job_url for r in results} | {r.job_url for r in rejected}
@@ -341,7 +366,7 @@ class Matcher:
         for job in jobs:
             if job.job_url in already_done:
                 continue
-            reason = apply_hard_filters(job, candidate_langs)
+            reason = apply_hard_filters(job, candidate_langs,preferences)
             if reason:
                 rejected.append(RejectedMatch(job_url=job.job_url, candidate_id=candidate_id, rejection_reason=reason))
             else:
@@ -354,6 +379,7 @@ class Matcher:
             jobs_for_matching = [
                 JobForMatching(
                     job_url=j.job_url,
+                    job_id=j.job_id or j.job_url,
                     structured=j,
                     raw_description=raw_jobs_by_url.get(j.job_url, RawJob()).description or "",
                 )

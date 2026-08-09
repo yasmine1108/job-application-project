@@ -4,7 +4,7 @@ from rapidfuzz import process, fuzz
 DEGREE_LEVEL_GUIDANCE = (
     "Normalize by total years of post-secondary study, NOT by literal degree "
     "name — titles differ across education systems. Examples: French Bac = "
-    "HIGH_SCHOOL. Classe Préparatoire (CPGE) alone = SOME_COLLEGE (2 yrs, no "
+    "HIGH_SCHOOL. Classe Préparatoire (CPGE) alone = SHORT_CYCLE (2 yrs, no "
     "standalone degree). BTS/DUT = ASSOCIATE (~2 yrs, degree awarded). Licence "
     "= BACHELOR (~3 yrs). Diplôme d'Ingénieur, Master, MBA = MASTER (~5 yrs "
     "total, master-equivalent). Doctorat/PhD = DOCTORATE (~8 yrs)."
@@ -45,10 +45,3 @@ def normalize_skill_name(raw_name: str) -> str:
 
     return raw_name.strip()
 
-DIMENSION_WEIGHTS = {
-    "skills": 0.40,
-    "education": 0.15,
-    "experience": 0.25,
-    "work_arrangement": 0.10,
-    "employment_type": 0.10,
-}

@@ -68,7 +68,15 @@ class Skill(BaseModel):
     category: SkillCategory | None = Field(
         default=None,
         description=(
-            "Category of a professional/technical skill (e.g. Python, Docker, communication). Use PROGRAMMING_LANGUAGE for coding languages like Python, Java, SQL. Do NOT put spoken/human languages (French, English, Arabic) here — those belong in spoken_languages."
+            "Category of the skill:\n"
+            "- PROGRAMMING_LANGUAGE: coding/query languages only, e.g. Python, Java, SQL, JavaScript, C++.\n"
+            "- TECHNICAL: frameworks, libraries, databases, cloud/DevOps platforms, data engineering tools, "
+            "e.g. React, Node.js, PostgreSQL, MongoDB, Docker, Kubernetes, AWS, Hadoop.\n"
+            "- TOOL: standalone software/utilities used in the work, e.g. Git, GitHub, Selenium, EVE-NG, pfSense.\n"
+            "- SOFT: interpersonal/non-technical skills, e.g. communication, leadership, teamwork.\n"
+            "- DOMAIN: subject-matter/business domain knowledge, e.g. insurance, fintech, healthcare, IoT.\n"
+            "- OTHER: anything technical that doesn't fit above.\n"
+            "Do NOT put spoken/human languages (French, English, Arabic) here — those belong in spoken_languages."
         ),
     )
     evidence: list[str] | None

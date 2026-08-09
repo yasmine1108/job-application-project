@@ -1,4 +1,4 @@
-from src.shared import normalize_skill_name
+from src.shared import normalize_skill_name, DEGREE_LEVEL_GUIDANCE
 from src.models import (
     CandidateProfile,
     ParsedDocument,
@@ -74,15 +74,21 @@ Rules:
 - If the source is a table, each table row (after the header) is normally one education entry.
 - Institution, degree/diploma title, dates and location may be split across multiple table cells or lines - combine them correctly into a single entry.
 - Normalize dates to a consistent format when possible (e.g. "Sept. 2024 - Present").
+- ALWAYS attempt to fill "degree_level" and "years_of_study" for every entry, even when the CV doesn't state them explicitly - infer them from the degree name using the degree_level guidance below. Only leave them null if the degree name is too ambiguous to classify at all.
 - If a field is missing, return null. Never invent information.
 - Never return an empty list if any education information exists in the text below.
 
+degree_level guidance: {degree_level_guidance}
+
 Example:
 Input table row: "Faculté des Sciences de Bizerte (FSB) | Sept. 2024 - Present | Diplome d'Ingenieur en Genie Logiciel | Bizerte, Tunisie"
-Output entry: {{"degree": "Diplome d'Ingenieur en Genie Logiciel", "institution": "Faculte des Sciences de Bizerte (FSB)", "field_of_study": "Genie Logiciel", "start_date": "Sept. 2024", "end_date": "Present", "description": null}}
+Output entry: {{"degree": "Diplome d'Ingenieur en Genie Logiciel", "degree_level": "master", "years_of_study": 5, "institution": "Faculte des Sciences de Bizerte (FSB)", "field_of_study": "Genie Logiciel", "start_date": "Sept. 2024", "end_date": "Present", "description": null}}
 Example 2:
 Input: "Baccalauréat en Mathématiques – Mention Bien"
-Output entry: {{"degree": "Baccalauréat", "institution": null, "field_of_study": "Mathématiques", "start_date": null, "end_date": null, "description": "Mention Bien"}}
+Output entry: {{"degree": "Baccalauréat", "degree_level": "high_school", "years_of_study": null, "institution": null, "field_of_study": "Mathématiques", "start_date": null, "end_date": null, "description": "Mention Bien"}}
+Example 3:
+Input: "Classe Préparatoire Intégrée (CPI) – Major de Promotion"
+Output entry: {{"degree": "Classe Préparatoire Intégrée (CPI)", "degree_level": "short_cycle", "years_of_study": 2, "institution": null, "field_of_study": null, "start_date": null, "end_date": null, "description": "Major de Promotion"}}
             """),
             ("human", """
 CV Markdown (look for an Education / Formation / Diplomes section):
@@ -149,22 +155,38 @@ You are an expert at extracting technical/soft skills from CVs.
 
 Your ONLY task is to extract every individual skill as a SEPARATE object in the "skills" list.
 
+A skill is a NAMED technology, tool, framework, language, methodology, or well-established competency
+that would appear on a skills list or a job posting's requirements (e.g. "Python", "Docker", "Machine Learning",
+"Agile", "communication", "software testing").
+
+A skill is NOT a paraphrased action or responsibility clause lifted from a bullet point
+(e.g. do NOT extract things like "publishing content", "managing relationships", "job applications",
+"data cleaning steps" as skills just because they appear in a sentence describing what someone did -
+only extract the actual named technology/methodology terms from within that sentence, if any).
+
 Rules:
 - Skills are often listed as a comma-separated list under a category header (e.g. "Langages: Python, Java, SQL").
 - Split each comma-separated item into its OWN separate Skill object. Do not group multiple skills into one object.
-- Use the category header (e.g. "Langages", "Cloud, DevOps & MLOps") as the "category" field for each skill under it.
-- Extract EVERY skill mentioned anywhere in the CV, not just from a dedicated skills section - also check technologies mentioned in experience/project entries.
+- Use the category header from the dedicated skills section (e.g. "Langages", "Cloud, DevOps & MLOps") as the "category" field for each skill under it.
+- Also extract named technologies/tools mentioned in experience/project bullet points (e.g. "LangChain", "ChromaDB", "Scikit-Learn") even if not in the main skills section - but do NOT convert the surrounding sentence's action/verb phrasing into a skill.
+- Also extract named technologies/tools/methodologies mentioned in experience, project, AND education entries (e.g. relevant coursework like "AWS Academy Data Engineering", "OpenMP", "MPI") - not just from the main skills section.
+- category field: TECHNICAL = frameworks, libraries, databases, cloud/DevOps platforms, ML/data concepts, e.g. React, PostgreSQL, Docker, AWS, Machine Learning. TOOL = standalone software utilities, e.g. Git, Selenium, EVE-NG. If genuinely unsure between TECHNICAL and TOOL, prefer TECHNICAL.
 - Never return an empty list if any skills are present in the text below.
 - Never invent skills that are not written in the text.
 - "evidence" should be null unless the CV text explicitly ties that skill to a specific bullet point elsewhere.
 
-Example:
+Example (correct):
 Input: "Langages : Python, Java, SQL"
 Output skills: [
-  {{"name": "Python", "category": "Langages", "evidence": null}},
-  {{"name": "Java", "category": "Langages", "evidence": null}},
-  {{"name": "SQL", "category": "Langages", "evidence": null}}
+  {{"name": "Python", "category": "programming_language", "evidence": null}},
+  {{"name": "Java", "category": "programming_language", "evidence": null}},
+  {{"name": "SQL", "category": "programming_language", "evidence": null}}
 ]
+
+Example (what NOT to do):
+Input: "Développement Full-Stack : Conception d'une plateforme inspirée de LinkedIn permettant la publication de contenus, la gestion des relations professionnelles et la candidature à des offres d'emploi."
+WRONG - do not extract: "publication de contenus", "gestion des relations professionnelles", "candidature à des offres d'emploi" (these are just a description of what the platform does, not skills)
+CORRECT - nothing to extract here unless a named technology appears elsewhere in that entry (e.g. "Node.js", "Express", "MongoDB" from the technologies list).
             """),
             ("human", """
 CV Markdown (look for Skills / Competences Techniques sections, and technologies mentioned elsewhere):
@@ -243,12 +265,12 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
 
         # Education
         education_messages = self.education_prompt.format_messages(
-            markdown=document.content, tables=tables_text
+            markdown=document.content, tables=tables_text, degree_level_guidance=DEGREE_LEVEL_GUIDANCE
         )
         self._debug_dump("education", education_messages)
         education_result: EducationList = (
             self.education_prompt | self.education_llm
-        ).invoke({"markdown": document.content, "tables": tables_text})
+        ).invoke({"markdown": document.content, "tables": tables_text, "degree_level_guidance": DEGREE_LEVEL_GUIDANCE})
 
         # Experience
         experience_messages = self.experience_prompt.format_messages(
@@ -305,6 +327,7 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
         )
         candidate_profile = populate_skill_evidence(candidate_profile)
         candidate_profile = normalize_profile_skills(candidate_profile)
+        candidate_profile = enforce_standard_years_of_study(candidate_profile)
         # Cache the extracted profile
         cache_dir = Path("data/outputs")
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -315,6 +338,32 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
             f.write(candidate_profile.model_dump_json(indent=2))
         
         return candidate_profile
+
+STANDARD_YEARS_BY_DEGREE_LEVEL = {
+    "high_school": None,
+    "short_cycle": 2,
+    "associate": 2,
+    "bachelor": 3,
+    "master": 5,
+    "doctorate": 8,
+    "other": None,
+}
+
+def enforce_standard_years_of_study(profile: CandidateProfile) -> CandidateProfile:
+    """
+    The LLM tends to compute years_of_study from the entry's start/end dates
+    (e.g. an in-progress degree spanning 2024-2027 -> 3) instead of the
+    degree's actual total duration (Diplome d'Ingenieur = 5 years total,
+    regardless of how many years remain). Standard duration by degree_level
+    is well-defined and not something that needs LLM judgment, so we
+    override it deterministically here rather than relying on prompting.
+    """
+    for edu in profile.education:
+        if edu.degree_level:
+            standard = STANDARD_YEARS_BY_DEGREE_LEVEL.get(edu.degree_level.value)
+            if standard is not None:
+                edu.years_of_study = standard
+    return profile
 
 def normalize_profile_skills(profile: CandidateProfile) -> CandidateProfile:
     for skill in profile.skills:
@@ -371,12 +420,25 @@ def _find_evidence_for_skill(skill_name: str, profile: CandidateProfile) -> list
 
 
 def _extract_snippet(text: str, pattern: re.Pattern, context_chars: int = 60) -> str:
-    """Return a short window of text around the first match, not the whole paragraph."""
+    """Return a short window of text around the first match, not the whole
+    paragraph. Boundaries are pulled back to the nearest whitespace so words
+    aren't sliced in half."""
     match = pattern.search(text)
     if not match:
         return text
+
     start = max(0, match.start() - context_chars)
+    if start > 0:
+        next_space = text.find(" ", start)
+        if 0 <= next_space < match.start():
+            start = next_space + 1
+
     end = min(len(text), match.end() + context_chars)
+    if end < len(text):
+        prev_space = text.rfind(" ", match.end(), end)
+        if prev_space > match.end():
+            end = prev_space
+
     snippet = text[start:end].strip()
     if start > 0:
         snippet = "…" + snippet

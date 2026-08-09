@@ -1,4 +1,4 @@
-from src.ai_modules.matcher import CandidatePreferences, apply_hard_filters
+from agent_project.src.matchers.matcher import CandidatePreferences, apply_hard_filters
 from src.models import SpokenLanguage
 from src.models_job import ApplicationStatus, EmploymentType, JobOffer, WorkArrangement
 
