@@ -2,6 +2,12 @@ import json
 import os
 from datetime import date, datetime
 
+from agent_project.src.scrapers.application_logging import ApplicationLog, save_application_log
+from src.ai_modules.cover_letter import generate_cover_letter
+from src.llm.fallback import FallbackLLM
+from src.matchers.matcher import MatchResult
+from src.models import CandidateProfile
+from src.models_job import JobOffer, RawJob
 from src.scrapers.base_scraper import BaseScraper
 from config.settings import Settings
 
@@ -64,6 +70,7 @@ class TanitJobsScraper(BaseScraper):
         self.email = Settings.LINKEDIN_EMAIL
         self.password = Settings.LINKEDIN_PASSWORD
         self.output_file = "data/outputs/tanitjobs_links.json"
+        self.applications_output_path = "data/outputs/tanitjobs_applications.json"
     
     def is_logged_in(self):
         try:
@@ -239,3 +246,63 @@ class TanitJobsScraper(BaseScraper):
             "expiration_date": expiration_raw,
             "accepting_applications": self._is_still_open(expiration_raw),
         }
+
+    def auto_apply(self, job_url: str, candidate: CandidateProfile, cv_path: str, llm: FallbackLLM, match_result: MatchResult, job_offer: JobOffer, raw_job: RawJob, dry_run: bool = True) -> ApplicationLog:
+        print(f"Attempting to auto-apply for job: {job_url}")
+        self.page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
+        apply_button = self.page.get_by_role("button", name="Postuler maintenant")
+        apply_button.wait_for(state="visible", timeout=10000)
+        apply_button.click()
+
+        fullname_field = self.page.get_by_role("textbox", name="name")
+        email_field = self.page.get_by_role("textbox", name="email")
+        phone_field = self.page.get_by_role("textbox", name="phone")
+        file_input = self.page.query_selector('input[type="file"]')
+        cover_letter_field = self.page.get_by_role("textbox", name="comments")
+
+        if fullname_field.input_value().strip() == "":
+            fullname_field.fill(candidate.personal_information.full_name)
+        if email_field.input_value().strip() == "":
+            email_field.fill(candidate.personal_information.email)
+        if phone_field.input_value().strip() == "":
+            phone_field.fill(candidate.personal_information.phone)
+        file_input.set_input_files(cv_path)
+
+        cover_letter = generate_cover_letter(
+            candidate=candidate,
+            match_result=match_result,
+            job_offer=job_offer,
+            company=raw_job.company,
+            job_description=raw_job.description,
+            llm=llm,
+        )
+        cover_letter_field.fill(cover_letter or "")
+
+        # Read back exactly what's on the page -- not what we *think* we filled --
+        # so a logged dry run reflects reality (pre-filled fields we skipped included).
+        payload = {
+            "job_url": job_url,
+            "name": fullname_field.input_value(),
+            "email": email_field.input_value(),
+            "phone": phone_field.input_value(),
+            "cv_path": cv_path,
+            "cover_letter": cover_letter,
+        }
+
+        submit_button = self.page.get_by_role("button", name="Envoyer la candidature")
+        submit_button.wait_for(state="visible", timeout=10000)
+
+        cover_letter_source = "generated" if cover_letter else "none"
+        if dry_run:
+            print(f"[DRY RUN] Not submitting. Payload for {job_url}:\n{payload}")
+            log = ApplicationLog(job_url=job_url, candidate_id=candidate.personal_information.email, dry_run=True, submitted=False, payload=payload, cover_letter_source=cover_letter_source)
+        else:
+            submit_button.click()
+            self.page.wait_for_load_state("networkidle")
+            log = ApplicationLog(job_url=job_url, candidate_id=candidate.personal_information.email, dry_run=False, submitted=True, payload=payload, cover_letter_source=cover_letter_source)
+
+        self._save_application_log(log)
+        return log
+
+    def _save_application_log(self, log: ApplicationLog) -> None:
+        save_application_log(self.applications_output_path, log)

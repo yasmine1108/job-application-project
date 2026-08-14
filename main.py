@@ -102,7 +102,7 @@ if __name__ == "__main__":
     )
 
     results = matcher.run(
-        candidate_id="yasmine_chakroun",
+        candidate_id=candidate_profile.personal_information.email,
         candidate=matching_profile,
         candidate_langs=matching_profile.spoken_languages,
         jobs=jobs,
@@ -112,4 +112,5 @@ if __name__ == "__main__":
 
     for r in sorted(results, key=lambda r: r.overall_score, reverse=True):
         print(f"{r.overall_score:.2f} | {r.judgment.summary[:80]} | {r.job_url}")
+
 

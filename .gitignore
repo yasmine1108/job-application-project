@@ -5,6 +5,9 @@
 cv_parser_env/
 venv/
 env/
+test_env/
+langraph_env/
+last_test_env/
 
 # Python cache and compiled files
 __pycache__/
