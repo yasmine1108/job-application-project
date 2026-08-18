@@ -2,7 +2,7 @@ import json
 import os
 from datetime import date, datetime
 
-from agent_project.src.scrapers.application_logging import ApplicationLog, save_application_log
+from src.application_logging import ApplicationLog, save_application_log
 from src.ai_modules.cover_letter import generate_cover_letter
 from src.llm.fallback import FallbackLLM
 from src.matchers.matcher import MatchResult
@@ -254,11 +254,11 @@ class TanitJobsScraper(BaseScraper):
         apply_button.wait_for(state="visible", timeout=10000)
         apply_button.click()
 
-        fullname_field = self.page.get_by_role("textbox", name="name")
-        email_field = self.page.get_by_role("textbox", name="email")
-        phone_field = self.page.get_by_role("textbox", name="phone")
-        file_input = self.page.query_selector('input[type="file"]')
-        cover_letter_field = self.page.get_by_role("textbox", name="comments")
+        fullname_field = self.page.locator("input[name='name']")
+        email_field = self.page.locator("input[name='email']")
+        phone_field = self.page.locator("input[name='phone']")
+        file_input = self.page.locator('input[type="file"]')
+        cover_letter_field = self.page.locator("textarea[name='comments']")
 
         if fullname_field.input_value().strip() == "":
             fullname_field.fill(candidate.personal_information.full_name)
@@ -266,7 +266,9 @@ class TanitJobsScraper(BaseScraper):
             email_field.fill(candidate.personal_information.email)
         if phone_field.input_value().strip() == "":
             phone_field.fill(candidate.personal_information.phone)
-        file_input.set_input_files(cv_path)
+        if file_input and cv_path:
+            print(f"Uploading CV from {cv_path}")
+            file_input.set_input_files(cv_path)
 
         cover_letter = generate_cover_letter(
             candidate=candidate,
@@ -295,11 +297,11 @@ class TanitJobsScraper(BaseScraper):
         cover_letter_source = "generated" if cover_letter else "none"
         if dry_run:
             print(f"[DRY RUN] Not submitting. Payload for {job_url}:\n{payload}")
-            log = ApplicationLog(job_url=job_url, candidate_id=candidate.personal_information.email, dry_run=True, submitted=False, payload=payload, cover_letter_source=cover_letter_source)
+            log = ApplicationLog(job_url=job_url, candidate_id=candidate.candidate_id, dry_run=True, submitted=False, payload=payload, cover_letter_source=cover_letter_source)
         else:
             submit_button.click()
             self.page.wait_for_load_state("networkidle")
-            log = ApplicationLog(job_url=job_url, candidate_id=candidate.personal_information.email, dry_run=False, submitted=True, payload=payload, cover_letter_source=cover_letter_source)
+            log = ApplicationLog(job_url=job_url, candidate_id=candidate.candidate_id, dry_run=False, submitted=True, payload=payload, cover_letter_source=cover_letter_source)
 
         self._save_application_log(log)
         return log

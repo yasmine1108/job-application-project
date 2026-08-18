@@ -100,6 +100,7 @@ class MatchingProfile(BaseModel):
     spoken_languages: list[SpokenLanguage] = Field(default_factory=list)
 
 class CandidateProfile(BaseModel):
+    candidate_id: str | None = None
     personal_information: PersonalInformation
     professional_summary: str | None
     education: list[Education] = Field(default_factory=list)

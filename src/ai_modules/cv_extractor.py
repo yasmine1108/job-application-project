@@ -333,6 +333,8 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_filename = f"{Path(str(document.file_name)).stem}_profile.json"
         cache_path = cache_dir / cache_filename
+
+        candidate_profile = ensure_candidate_id(candidate_profile, cache_path)
         
         with open(cache_path, "w", encoding="utf-8") as f:
             f.write(candidate_profile.model_dump_json(indent=2))

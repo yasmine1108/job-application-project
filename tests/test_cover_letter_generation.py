@@ -25,7 +25,7 @@ def test_cover_letter_generation():
     match_result = get_match_result_by_job_id_from_file(
         job_id="2032767",
         path="data/outputs/tanitjobs_match_results.json",
-        candidate_id=candidate.personal_information.email)
+        candidate_id=candidate.candidate_id,)
     
     cover_letter_draft = generate_cover_letter(
         candidate=candidate,

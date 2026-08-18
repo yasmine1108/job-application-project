@@ -1,3 +1,7 @@
+from agent_project.config.settings import Settings
+from agent_project.src.llm.fallback import FallbackLLM
+from agent_project.src.llm.gemini_provider import GeminiProvider
+from agent_project.src.llm.groq_provider import GroqProvider
 from src.scrapers.tanitjobs import TanitJobsScraper
 from src.data_helpers import (
     get_raw_job_by_id,
@@ -5,7 +9,7 @@ from src.data_helpers import (
     get_match_result_by_job_id_from_file,
     load_candidate_profile_from_example,
 )
-from src.scrapers.application_logging import ApplicationLog
+from agent_project.src.application_logging import ApplicationLog
 
 
 
@@ -17,25 +21,22 @@ def test_tanitjobs_auto_apply_dry_run(tmp_path):
     match_result = get_match_result_by_job_id_from_file(
         job_id="2032767",
         path="data/outputs/tanitjobs_match_results.json",
-        candidate_id=candidate.personal_information.email,
+        candidate_id=candidate.candidate_id,
     )
 
     scraper = TanitJobsScraper()
-    # attach fake page and set output path to tmp
-    scraper.page = FakePage()
-    scraper.applications_output_path = tmp_path / "apps.json"
 
-    # create a dummy cv file
-    cv_path = tmp_path / "cv.pdf"
-    cv_path.write_text("dummy cv content")
-
-    llm = FakeLLM()
-
+    fallback_llm = FallbackLLM([
+        GeminiProvider(Settings.GEMINI_API_KEY, "gemini-3.5-flash"),
+        GeminiProvider(Settings.GEMINI_API_KEY, "gemini-3.5-flash-lite"),
+        GroqProvider(Settings.GROQ_API_KEY, "openai/gpt-oss-120b"),
+        GroqProvider(Settings.GROQ_API_KEY, "openai/gpt-oss-20b"),
+    ])
     log = scraper.auto_apply(
         job_url=raw_job.job_url,
         candidate=candidate,
-        cv_path=str(cv_path),
-        llm=llm,
+        cv_path=str("data/outputs/example_cv.pdf"),
+        llm=fallback_llm,
         match_result=match_result,
         job_offer=job_offer,
         raw_job=raw_job,
@@ -48,5 +49,5 @@ def test_tanitjobs_auto_apply_dry_run(tmp_path):
     assert log.payload["name"] == candidate.personal_information.full_name
     assert log.payload["email"] == candidate.personal_information.email
     assert log.payload["phone"] == candidate.personal_information.phone
-    assert log.payload["cv_path"] == str(cv_path)
+    assert log.payload["cv_path"] == str("data/outputs/example_cv.pdf")
     assert "Dear hiring team" in (log.payload["cover_letter"] or "")

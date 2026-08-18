@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from agent_project.config.settings import Settings
+from config.settings import Settings
 from src.models import CandidateProfile
 from src.models_job import JobOffer
 from src.matchers.matcher import MatchResult
