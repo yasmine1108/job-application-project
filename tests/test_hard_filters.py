@@ -1,6 +1,6 @@
 from agent_project.src.matchers.matcher import CandidatePreferences, apply_hard_filters
 from src.models import SpokenLanguage
-from src.models_job import ApplicationStatus, EmploymentType, JobOffer, WorkArrangement
+from src.models_job import EmploymentType, JobOffer, JobStatus, WorkArrangement
 
 
 def test_relocate_false_rejects_on_site_job_in_other_country():
@@ -10,7 +10,7 @@ def test_relocate_false_rejects_on_site_job_in_other_country():
         employment_type=EmploymentType.FULL_TIME,
         work_arrangement=WorkArrangement.ON_SITE,
         location="Berlin, Berlin, Germany",
-        application_status=ApplicationStatus.NOT_APPLIED,
+        job_status=JobStatus.OPEN,
         required_languages=[],
     )
 
@@ -31,7 +31,7 @@ def test_distance_limit_rejects_far_on_site_job():
         employment_type=EmploymentType.FULL_TIME,
         work_arrangement=WorkArrangement.ON_SITE,
         location="Sfax, Sfax, Tunisia",
-        application_status=ApplicationStatus.NOT_APPLIED,
+        job_status=JobStatus.OPEN,
         required_languages=[],
     )
 

@@ -2,12 +2,13 @@ import json
 import os
 from datetime import date, datetime
 
+from src.scrapers.job_board_scraper import JobBoardScraper
 from src.application_logging import ApplicationLog, save_application_log
 from src.ai_modules.cover_letter import generate_cover_letter
 from src.llm.fallback import FallbackLLM
 from src.matchers.matcher import MatchResult
 from src.models import CandidateProfile
-from src.models_job import JobOffer, RawJob
+from src.models_job import JobOffer, JobStatus, RawJob
 from src.scrapers.base_scraper import BaseScraper
 from config.settings import Settings
 
@@ -63,12 +64,12 @@ def infer_work_arrangement(location: str | None,title: str | None) -> str:
         return "remote"
     return "on-site"
 
-class TanitJobsScraper(BaseScraper):
+class TanitJobsScraper(JobBoardScraper):
     def __init__(self):
         super().__init__(base_url="http://www.tanitjobs.com/")
         
-        self.email = Settings.LINKEDIN_EMAIL
-        self.password = Settings.LINKEDIN_PASSWORD
+        self.email = Settings.TANITJOBS_EMAIL
+        self.password = Settings.TANITJOBS_PASSWORD
         self.output_file = "data/outputs/tanitjobs_links.json"
         self.applications_output_path = "data/outputs/tanitjobs_applications.json"
     
@@ -90,9 +91,6 @@ class TanitJobsScraper(BaseScraper):
         self.page.locator("xpath=/html/body/div[4]/div/div[1]/div[1]/div/form/div[1]/input").fill(self.email)
         self.page.locator("xpath=/html/body/div[4]/div/div[1]/div[1]/div/form/div[2]/input").fill(self.password)
         self.page.locator("xpath=/html/body/div[4]/div/div[1]/div[1]/div/form/table/tbody/tr/td[1]/div/input").click()
-        cookies = self.page.context.cookies()  
-        for c in cookies:
-            print(c.get("name"), c.get("expires"))
         self.sb.sleep(5)
 
     def _is_still_open(self, expiration_date: str | None) -> bool:
@@ -107,57 +105,59 @@ class TanitJobsScraper(BaseScraper):
         except ValueError:
             return True
 
-    def search_and_collect_links(self, keyword):
-        logo_link = self.page.locator("a[href='https://www.tanitjobs.com']")
-        logo_link.wait_for(state="visible")
-        logo_link.click()
-        search_input = self.page.get_by_placeholder("Mots Clés")
-        search_input.wait_for(state="visible")
-        search_input.fill(keyword)
-        search_input.press("Enter")
-
-        self.sb.sleep(5)
-        job_cards = self.page.locator(".sj-job-card")
-        count = job_cards.count()
-        print(f"Nombre de cartes détectées : {count}")
-
-        collected = []
-        for i in range(count):
-            card = job_cards.nth(i)
-
-            job_id = card.get_attribute("id")
-
-            link_el = card.locator("div.sj-card-title a").first
-            job_url = self._clean_url(link_el.get_attribute("href"))
-            print(f"Job ID: {job_id}, URL: {job_url}")
-
-            if not job_url:
-                continue
-
-            title = self._safe_text(lambda: card.locator("div.sj-card-title a").first)
-            company = self._safe_text(lambda: card.locator("div.sj-card-company a").first)
-            location = self._safe_text(lambda: card.locator("span.sj-loc").first)
-            raw_employment_type = self._safe_text(lambda: card.locator("span.sj-type").first)
-            employment_type, raw_type_preserved = translate_employment_type(raw_employment_type)
-            work_arrangement = infer_work_arrangement(location,title)
-            date_posted = self._safe_text(lambda: card.locator("span.sj-card-date").first)
-
-            collected.append({
-                "job_id": job_id,
-                "job_url": job_url,
-                "title": title,
-                "company": company,
-                "location": location,
-                "employment_type": employment_type,
-                "raw_employment_type": raw_type_preserved,
-                "work_arrangement": work_arrangement,
-                "date_posted": date_posted,
-            })
-
-
-        print(f"Total de cartes collectées : {len(collected)}")
-        self._merge_and_save(collected)
-        return collected
+    def search_and_collect_links(self, keyword, debug=True):
+           logo_link = self.page.locator("a[href='https://www.tanitjobs.com']")
+           logo_link.wait_for(state="visible")
+           logo_link.click()
+           search_input = self.page.get_by_placeholder("Mots Clés")
+           search_input.wait_for(state="visible")
+           search_input.fill(keyword)
+           search_input.press("Enter")
+   
+           self.sb.sleep(5)
+           job_cards = self.page.locator(".sj-job-card")
+           count = job_cards.count()
+           print(f"Nombre de cartes détectées : {count}")
+   
+           collected = []
+           if debug: count = min(count, 5)  # limit to first 5 for debugging
+           for i in range(count):
+               card = job_cards.nth(i)
+   
+               job_id = card.get_attribute("id")
+   
+               link_el = card.locator("div.sj-card-title a").first
+               job_url = self._clean_url(link_el.get_attribute("href"))
+               print(f"Job ID: {job_id}, URL: {job_url}")
+   
+               if not job_url:
+                   continue
+   
+               title = self._safe_text(lambda: card.locator("div.sj-card-title a").first)
+               company = self._safe_text(lambda: card.locator("div.sj-card-company a").first)
+               location = self._safe_text(lambda: card.locator("span.sj-loc").first)
+               raw_employment_type = self._safe_text(lambda: card.locator("span.sj-type").first)
+               employment_type, raw_type_preserved = translate_employment_type(raw_employment_type)
+               work_arrangement = infer_work_arrangement(location,title)
+               date_posted = self._safe_text(lambda: card.locator("span.sj-card-date").first)
+   
+               collected.append({
+                   "job_id": job_id,
+                   "job_url": job_url,
+                   "title": title,
+                   "company": company,
+                   "location": location,
+                   "employment_type": employment_type,
+                   "raw_employment_type": raw_type_preserved,
+                   "work_arrangement": work_arrangement,
+                   "date_posted": date_posted,
+                   "job_status": JobStatus.OPEN,
+               })
+   
+   
+           print(f"Total de cartes collectées : {len(collected)}")
+           self._merge_and_save(collected)
+           return collected
 
     def _clean_url(self, href):
         """Strip tracking params (backPage, searchID) so the same job
@@ -214,7 +214,7 @@ class TanitJobsScraper(BaseScraper):
             with open(details_file, "w", encoding="utf-8") as f:
                 json.dump(existing, f, indent=4, ensure_ascii=False)
 
-        return existing
+        return [RawJob.model_validate(item) for item in existing]
 
     def extract_job_details(self, job_url: str) -> dict:
         self.page.goto(job_url,wait_until="domcontentloaded", timeout=30000)
@@ -296,7 +296,7 @@ class TanitJobsScraper(BaseScraper):
 
         cover_letter_source = "generated" if cover_letter else "none"
         if dry_run:
-            print(f"[DRY RUN] Not submitting. Payload for {job_url}:\n{payload}")
+            print(f"[DRY RUN] Not submitting. Payload for {job_url}")
             log = ApplicationLog(job_url=job_url, candidate_id=candidate.candidate_id, dry_run=True, submitted=False, payload=payload, cover_letter_source=cover_letter_source)
         else:
             submit_button.click()

@@ -2,11 +2,16 @@ import json
 import os
 from datetime import datetime
 
+from src.application_logging import ApplicationLog
+from src.llm.fallback import FallbackLLM
+from src.matchers.matcher import MatchResult
+from src.models import CandidateProfile
+from src.scrapers.job_board_scraper import JobBoardScraper
 from src.scrapers.base_scraper import BaseScraper
-from src.models_job import RawJob
+from src.models_job import JobOffer, RawJob
 from config.settings import Settings
 
-class LinkedInScraper(BaseScraper):
+class LinkedInScraper(JobBoardScraper):
 
     def __init__(self):
         super().__init__(base_url="http://www.linkedin.com/")
@@ -189,6 +194,8 @@ class LinkedInScraper(BaseScraper):
         with open(self.jobs_list_file, "w", encoding="utf-8") as f:
             json.dump(serializable_jobs, f, indent=4, ensure_ascii=False)
 
+        return jobs
+
     def _extract_via_dom(self):
 
         # html = self.page.content()
@@ -207,7 +214,15 @@ class LinkedInScraper(BaseScraper):
                 r"text=/\b(?:\d+\+?\s+)?(?:hour|day|week|month|year)s?\s+ago\b/i").first),
         )
 
-    def auto_apply(self, job_url, cv_path):
-        """Méthode dédiée à l'interaction bouton par bouton (Phase 2)"""
-        # Ton code pour ouvrir l'URL d'une offre, cliquer sur postuler et uploader le CV
-        pass
+    def auto_apply(
+            self,
+            job_url: str,
+            candidate: CandidateProfile,
+            cv_path: str,
+            llm: FallbackLLM,
+            match_result: MatchResult,
+            job_offer: JobOffer,
+            raw_job: RawJob,
+            dry_run: bool = True,
+        ) -> ApplicationLog:
+            raise NotImplementedError("LinkedIn auto-apply not built yet")

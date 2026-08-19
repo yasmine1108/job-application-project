@@ -52,11 +52,16 @@ SYSTEM_PROMPT = (
 
 class JobOfferExtractor:
     """Provider-agnostic extractor. Which model(s) actually run this is
-    entirely decided by the FallbackLLM passed in"""
+    entirely decided by the FallbackLLM passed in.
 
-    def __init__(self, llm: FallbackLLM, input_path: str | Path, output_path: str | Path, batch_size: int = 10):
+    output_path is used only for resume/de-dup across runs (crash recovery,
+    skip-already-extracted) -- it is NOT how raw jobs get in. Raw jobs come
+    in as a list[RawJob] argument, so this can be called directly from an
+    in-memory pipeline without touching disk for input.
+    """
+
+    def __init__(self, llm: FallbackLLM, output_path: str | Path, batch_size: int = 10):
         self.llm = llm
-        self.input_path = Path(input_path)
         self.output_path = Path(output_path)
         self.batch_size = batch_size
 
@@ -92,36 +97,33 @@ class JobOfferExtractor:
             )
         return "\n".join(parts)
 
-    def extract_jobs_from_file(self) -> list[JobOffer]:
-        with self.input_path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-
-        all_raw_jobs = [RawJob(**item) if isinstance(item, dict) else item for item in payload]
-
-        # resume support: skip jobs already extracted in a previous run
+    def extract_jobs(self, raw_jobs: list[RawJob]) -> list[JobOffer]:
+        """Main entry point for the in-memory pipeline. Takes raw jobs
+        directly; only reads self.output_path to resume/skip jobs already
+        extracted in a previous run, and writes to it after every batch for
+        crash recovery -- same pattern as Matcher.run."""
         structured_jobs = self._load_existing_jobs()
         already_done = {job.job_url for job in structured_jobs}
 
-        # closed jobs can never be matched/applied to — skip the LLM entirely
         closed_count = sum(
-            1 for j in all_raw_jobs
+            1 for j in raw_jobs
             if j.job_url not in already_done and not j.accepting_applications
         )
-        raw_jobs = [
-            j for j in all_raw_jobs
+        to_extract = [
+            j for j in raw_jobs
             if j.job_url not in already_done and j.accepting_applications
         ]
         if closed_count:
             print(f"Skipping {closed_count} job(s) no longer accepting applications.")
 
-        for i in range(0, len(raw_jobs), self.batch_size):
-            chunk = raw_jobs[i:i + self.batch_size]
+        for i in range(0, len(to_extract), self.batch_size):
+            chunk = to_extract[i:i + self.batch_size]
             try:
                 results_by_url = self.extract_batch(chunk)
             except Exception as e:
-                print(f"Batch {i}-{i+len(chunk)} failed ({e}), saving progress and stopping.")
+                print(f"Batch {i}-{i + len(chunk)} failed ({e}), saving progress and stopping.")
                 self._write_jobs(self.output_path, structured_jobs)
-                break
+                raise  # was: break -- caller must know extraction was incomplete
 
             for raw_job in chunk:
                 inference = results_by_url.get(raw_job.job_url)
@@ -134,6 +136,16 @@ class JobOfferExtractor:
             self._write_jobs(self.output_path, structured_jobs)
 
         return structured_jobs
+
+    def extract_jobs_from_file(self, input_path: str | Path) -> list[JobOffer]:
+        """Thin file-based wrapper for standalone/CLI use, e.g. re-running
+        extraction on a previously saved scrape without going through the
+        full pipeline. Not used by the in-memory pipeline itself."""
+        input_path = Path(input_path)
+        with input_path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        raw_jobs = [RawJob(**item) if isinstance(item, dict) else item for item in payload]
+        return self.extract_jobs(raw_jobs)
 
     def _build_job_offer(self, raw_job: RawJob, inference: JobOfferInference) -> JobOffer:
         """Reconcile location: prefer the LLM's extracted location only when

@@ -1,3 +1,4 @@
+from src.candidate_identity import ensure_candidate_id
 from src.shared import normalize_skill_name, DEGREE_LEVEL_GUIDANCE
 from src.models import (
     CandidateProfile,
@@ -10,7 +11,6 @@ from src.models import (
     CertificationList,
     SpokenLanguageList,
 )
-import json
 from pathlib import Path
 from langchain_core.prompts import ChatPromptTemplate
 import re

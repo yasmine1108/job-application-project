@@ -93,11 +93,8 @@ class WorkArrangement(str, Enum):
     ON_SITE = "on-site"
 
 
-class ApplicationStatus(str, Enum):
-    NOT_APPLIED = "not_applied"
-    APPLIED = "applied"
-    FAILED = "failed"
-    SKIPPED = "skipped"
+class JobStatus(str, Enum):
+    OPEN = "open"
     CLOSED = "closed"
 
 class RawJob(BaseModel):
@@ -151,8 +148,7 @@ class JobOffer(BaseModel):
     required_certifications: list[CertificationRequirement] = Field(default_factory=list)
 
     easy_apply: bool = False
-    application_status: ApplicationStatus = ApplicationStatus.NOT_APPLIED
-    applied_at: datetime | None = None
+    job_status: JobStatus = JobStatus.OPEN
     inferred_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
 
     @classmethod

@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from src.matchers.country_normalize import normalize_country
 from src.llm.fallback import FallbackLLM
 from src.models import MatchingProfile, SpokenLanguage
-from src.models_job import ApplicationStatus, EmploymentType, JobOffer, RawJob, WorkArrangement
+from src.models_job import EmploymentType, JobOffer, JobStatus, RawJob, WorkArrangement
 import math
 
 # approximate centroid coordinates (lat, lon) for each Tunisian governorate
@@ -184,11 +184,8 @@ def apply_hard_filters(
     candidate_langs: list[SpokenLanguage],
     preferences: CandidatePreferences,
 ) -> str | None:
-    if job.application_status == ApplicationStatus.CLOSED:
+    if job.job_status == JobStatus.CLOSED:
         return "Job is no longer accepting applications"
-
-    if job.application_status != ApplicationStatus.NOT_APPLIED:
-        return f"Already in status: {job.application_status.value}"
 
     # --- employment type preference ---
     if (
