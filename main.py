@@ -74,6 +74,7 @@ if __name__ == "__main__":
         output_path="data/outputs/tanitjobs_structured_jobs.json",
         batch_size=8,
     )
+
 #     # job_extractor.extract_jobs_from_file()
 
 #     # job_offer = get_job_offer_by_id("4413017677")

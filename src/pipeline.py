@@ -56,8 +56,8 @@ def run_pipeline_for_candidate(
         scraper.start_browser()
         scraper.ensure_logged_in()
         try:
-            scraper.search_and_collect_links(keyword)  # persists link list internally
-            raw_jobs = scraper.extract_job_list()       # list[RawJob], in-memory (Phase 2 fix)
+            collected_links = scraper.search_and_collect_links(keyword)  # persists link list internally
+            raw_jobs = scraper.extract_job_list(collected_links)       # list[RawJob], in-memory (Phase 2 fix)
         finally:
             scraper.close_browser()
         all_raw_jobs.extend(raw_jobs)
@@ -123,8 +123,10 @@ def run_pipeline_for_candidate(
             scraper.close_browser()
         applied_logs.append(log)
 
-    return {
-        "auto_applied": applied_logs,
-        "to_confirm": to_confirm,   # exactly the tier LangGraph's interrupt() will consume next (Phase 5)
-        "discarded": discarded,
-    }
+
+
+    # return {
+    #     "auto_applied": applied_logs,
+    #     "to_confirm": to_confirm,   # exactly the tier LangGraph's interrupt() will consume next (Phase 5)
+    #     "discarded": discarded,
+    # }

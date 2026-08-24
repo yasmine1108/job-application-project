@@ -214,15 +214,31 @@ class LinkedInScraper(JobBoardScraper):
                 r"text=/\b(?:\d+\+?\s+)?(?:hour|day|week|month|year)s?\s+ago\b/i").first),
         )
 
-    def auto_apply(
-            self,
-            job_url: str,
-            candidate: CandidateProfile,
-            cv_path: str,
-            llm: FallbackLLM,
-            match_result: MatchResult,
-            job_offer: JobOffer,
-            raw_job: RawJob,
-            dry_run: bool = True,
-        ) -> ApplicationLog:
-            raise NotImplementedError("LinkedIn auto-apply not built yet")
+    def auto_apply(self, job_url: str, candidate: CandidateProfile, cv_path: str, llm: FallbackLLM, match_result: MatchResult, job_offer: JobOffer, raw_job: RawJob, dry_run: bool = True,) -> ApplicationLog:
+        self.page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
+        locator = self.page.get_by_text("No longer accepting applications", exact=False)
+        if locator.count() > 0:
+            raise NotImplementedError("Job is no longer accepting applications. Auto-apply cannot proceed.")
+        easy_apply_btn = self.page.get_by_role("button", name="LinkedIn Apply to this job")
+        easy_apply_btn.wait_for(state="visible", timeout=10000)
+        easy_apply_btn.click()
+
+        fname_field = self.page.get_by_label("First name").or_(self.page.get_by_label("Prénom"))
+        lname_field = self.page.get_by_label("Last name").or_(self.page.get_by_label("Nom"))
+        phone_code_dropdown = self.page.get_by_label("Phone country code")
+        phone_number_field = self.page.get_by_label("Mobile phone number").or_(self.page.get_by_label("Numéro de téléphone portable"))
+        email_dropdown = self.page.get_by_label("Email address").or_(self.page.get_by_label("Adresse e-mail"))
+        location = self.page.get_by_label("Location").or_(self.page.get_by_label("Lieu"))
+
+        if fname_field.count() > 0 and fname_field.input_value().strip() == "":
+            fname_field.fill(candidate.first_name)
+        if lname_field.count() > 0 and lname_field.input_value().strip() == "":
+            lname_field.fill(candidate.last_name)
+        if phone_code_dropdown.count() > 0 and phone_code_dropdown.input_value().strip() == "":
+            phone_code_dropdown.select_option(value = candidate.phone_country_code)
+        if phone_number_field.count() > 0 and phone_number_field.input_value().strip() == "":
+            phone_number_field.fill(candidate.personal_information.phone)
+        if email_dropdown.count() > 0 and email_dropdown.input_value().strip() == "":
+            email_dropdown.select_option(value = candidate.personal_information.email)
+        if location.count() > 0 and location.input_value().strip() == "":
+            location.fill(candidate.location)

@@ -47,6 +47,11 @@ SYSTEM_PROMPT = (
     "headquarters mentioned in passing is not necessarily the job location).\n\n"
     "Do not invent information not present or reasonably implied. If a field "
     "cannot be determined, omit it or leave its list empty."
+    "Each job is labeled with a job_id (a short alphanumeric string). Return "
+    "exactly one result per input job, with job_id set to the exact value "
+    "given for that job — do not alter, re-derive, guess, or attempt to "
+    "reproduce the job's URL or title as an identifier; job_id is the only "
+    "identifier needed."
 )
 
 
@@ -68,7 +73,22 @@ class JobOfferExtractor:
     def extract_batch(self, raw_jobs: list[RawJob]) -> dict[str, JobOfferInference]:
         prompt = self._build_batch_prompt(raw_jobs)
         batch = self.llm.generate_structured(SYSTEM_PROMPT, prompt, JobOfferInferenceBatch)
-        return {item.job_url: item for item in batch.results}
+        print(f"LLM returned {len(batch.results)} results for {len(raw_jobs)} jobs.")
+
+        job_ids = {job.job_id for job in raw_jobs}
+        if len(job_ids) != len(raw_jobs):
+            print("WARNING: duplicate job_id values in this batch — job_id lookup may be unreliable, check upstream extraction")
+
+        results_by_job_id: dict[str, JobOfferInference] = {}
+        for inference in batch.results:
+            if inference.job_id is None:
+                print("WARNING: LLM returned an inference without a job_id, skipping")
+                continue
+            if inference.job_id not in job_ids:
+                print(f"WARNING: LLM returned unknown job_id {inference.job_id!r} (not in this batch), skipping")
+                continue
+            results_by_job_id[inference.job_id] = inference
+        return results_by_job_id
 
     def _needs_location_extraction(self, job: RawJob) -> bool:
         """Location is missing, or the scraper mistakenly copied the title
@@ -88,6 +108,7 @@ class JobOfferExtractor:
                 else f"Location: {job.location}"
             )
             parts.append(
+                f"job_id: {job.job_id}\n"
                 f"job_url: {job.job_url}\n"
                 f"Title: {job.title or 'N/A'}\n"
                 f"Company: {job.company or 'N/A'}\n"
@@ -119,16 +140,17 @@ class JobOfferExtractor:
         for i in range(0, len(to_extract), self.batch_size):
             chunk = to_extract[i:i + self.batch_size]
             try:
-                results_by_url = self.extract_batch(chunk)
+                results_by_job_id = self.extract_batch(chunk)
+                print(f"Batch {i}-{i + len(chunk)} extracted successfully.")
             except Exception as e:
                 print(f"Batch {i}-{i + len(chunk)} failed ({e}), saving progress and stopping.")
                 self._write_jobs(self.output_path, structured_jobs)
                 raise  # was: break -- caller must know extraction was incomplete
 
             for raw_job in chunk:
-                inference = results_by_url.get(raw_job.job_url)
+                inference = results_by_job_id.get(raw_job.job_id)
                 if inference is None:
-                    print(f"WARNING: no result for {raw_job.job_url}, skipping")
+                    print(f"WARNING: no result for job_id {raw_job.job_id!r}, skipping")
                     continue
                 structured_jobs.append(self._build_job_offer(raw_job, inference))
 

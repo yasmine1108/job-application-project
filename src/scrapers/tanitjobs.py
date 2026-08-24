@@ -104,60 +104,106 @@ class TanitJobsScraper(JobBoardScraper):
             return parsed_date >= today
         except ValueError:
             return True
+        
+    def _go_to_next_page(self) -> bool:
+        next_link = self.page.locator("a.sj-page-btn.sj-arrow").filter(has_text="→")
+        if next_link.count() == 0:
+            return False
+        next_link.first.click()
+        self.sb.sleep(5)
+        return True
 
-    def search_and_collect_links(self, keyword, debug=True):
-           logo_link = self.page.locator("a[href='https://www.tanitjobs.com']")
-           logo_link.wait_for(state="visible")
-           logo_link.click()
-           search_input = self.page.get_by_placeholder("Mots Clés")
-           search_input.wait_for(state="visible")
-           search_input.fill(keyword)
-           search_input.press("Enter")
-   
-           self.sb.sleep(5)
-           job_cards = self.page.locator(".sj-job-card")
-           count = job_cards.count()
-           print(f"Nombre de cartes détectées : {count}")
-   
-           collected = []
-           if debug: count = min(count, 5)  # limit to first 5 for debugging
-           for i in range(count):
-               card = job_cards.nth(i)
-   
-               job_id = card.get_attribute("id")
-   
-               link_el = card.locator("div.sj-card-title a").first
-               job_url = self._clean_url(link_el.get_attribute("href"))
-               print(f"Job ID: {job_id}, URL: {job_url}")
-   
-               if not job_url:
-                   continue
-   
-               title = self._safe_text(lambda: card.locator("div.sj-card-title a").first)
-               company = self._safe_text(lambda: card.locator("div.sj-card-company a").first)
-               location = self._safe_text(lambda: card.locator("span.sj-loc").first)
-               raw_employment_type = self._safe_text(lambda: card.locator("span.sj-type").first)
-               employment_type, raw_type_preserved = translate_employment_type(raw_employment_type)
-               work_arrangement = infer_work_arrangement(location,title)
-               date_posted = self._safe_text(lambda: card.locator("span.sj-card-date").first)
-   
-               collected.append({
-                   "job_id": job_id,
-                   "job_url": job_url,
-                   "title": title,
-                   "company": company,
-                   "location": location,
-                   "employment_type": employment_type,
-                   "raw_employment_type": raw_type_preserved,
-                   "work_arrangement": work_arrangement,
-                   "date_posted": date_posted,
-                   "job_status": JobStatus.OPEN,
-               })
-   
-   
-           print(f"Total de cartes collectées : {len(collected)}")
-           self._merge_and_save(collected)
-           return collected
+    def _collect_cards_on_current_page(self, cards_per_page_limit):
+        job_cards = self.page.locator(".sj-job-card")
+        count = job_cards.count()
+        print(f"Nombre de cartes détectées : {count}")
+
+        if cards_per_page_limit is not None:
+            count = min(count, cards_per_page_limit)
+
+        page_collected = []
+        for i in range(count):
+            card = job_cards.nth(i)
+
+            job_id = card.get_attribute("id")
+
+            link_el = card.locator("div.sj-card-title a").first
+            job_url = self._clean_url(link_el.get_attribute("href"))
+            print(f"Job ID: {job_id}, URL: {job_url}")
+
+            if not job_url:
+                continue
+
+            title = self._safe_text(lambda: card.locator("div.sj-card-title a").first)
+            company = self._safe_text(lambda: card.locator("div.sj-card-company a").first)
+            location = self._safe_text(lambda: card.locator("span.sj-loc").first)
+            raw_employment_type = self._safe_text(lambda: card.locator("span.sj-type").first)
+            employment_type, raw_type_preserved = translate_employment_type(raw_employment_type)
+            work_arrangement = infer_work_arrangement(location, title)
+            date_posted = self._safe_text(lambda: card.locator("span.sj-card-date").first)
+
+            page_collected.append({
+                "job_id": job_id,
+                "job_url": job_url,
+                "title": title,
+                "company": company,
+                "location": location,
+                "employment_type": employment_type,
+                "raw_employment_type": raw_type_preserved,
+                "work_arrangement": work_arrangement,
+                "date_posted": date_posted,
+                "job_status": JobStatus.OPEN,
+            })
+
+        return page_collected
+
+    def search_and_collect_links(self, keyword, debug=True, cards_per_page_limit=2, max_pages=None):
+        """
+        cards_per_page_limit: cap cards read per page (for quickly testing
+        a single page's parsing logic). None = read every card on the page.
+        max_pages: hard safety cap on pages visited. None = no cap; the loop
+        already stops naturally at the first page with zero cards.
+        debug: convenience flag for quick manual testing -- caps both to
+        small values unless you also pass them explicitly.
+        """
+        if debug:
+            cards_per_page_limit = cards_per_page_limit if cards_per_page_limit is not None else 5
+            max_pages = max_pages if max_pages is not None else 1
+
+        logo_link = self.page.locator("a[href='https://www.tanitjobs.com']")
+        logo_link.wait_for(state="visible")
+        logo_link.click()
+        search_input = self.page.get_by_placeholder("Mots Clés")
+        search_input.wait_for(state="visible")
+        search_input.fill(keyword)
+        search_input.press("Enter")
+
+        self.sb.sleep(5)
+
+        collected = []
+        page_number = 1
+        while True:
+            if page_number > 1:
+                if not self._go_to_next_page():
+                    print(f"No next-page link found after page {page_number - 1}, stopping pagination.")
+                    break
+
+            page_collected = self._collect_cards_on_current_page(cards_per_page_limit)
+            if not page_collected:
+                print(f"Page {page_number}: no cards found, stopping pagination.")
+                break
+
+            collected.extend(page_collected)
+            self._merge_and_save(page_collected)  # incremental save, same crash-recovery pattern as elsewhere
+
+            if max_pages is not None and page_number >= max_pages:
+                print(f"Reached max_pages={max_pages}, stopping.")
+                break
+
+            page_number += 1
+
+        print(f"Total de cartes collectées : {len(collected)}")
+        return collected
 
     def _clean_url(self, href):
         """Strip tracking params (backPage, searchID) so the same job
@@ -192,9 +238,10 @@ class TanitJobsScraper(JobBoardScraper):
 
         print(f"Sauvegarde terminée. Total général : {len(existing)} offres ({added} ajoutées).")
 
-    def extract_job_list(self):
-        with open(self.output_file, "r", encoding="utf-8") as f:
-            cards = json.load(f)
+    def extract_job_list(self, collected_links):
+        # with open(self.output_file, "r", encoding="utf-8") as f:
+        #     cards = json.load(f)
+        cards = collected_links
 
         details_file = "data/outputs/tanitjobs_raw_job_list.json"
         existing = []
@@ -214,6 +261,7 @@ class TanitJobsScraper(JobBoardScraper):
             with open(details_file, "w", encoding="utf-8") as f:
                 json.dump(existing, f, indent=4, ensure_ascii=False)
 
+        print(f"Total de cartes détaillées collectées : {len(existing)}")
         return [RawJob.model_validate(item) for item in existing]
 
     def extract_job_details(self, job_url: str) -> dict:
