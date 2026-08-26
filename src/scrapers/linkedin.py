@@ -214,6 +214,28 @@ class LinkedInScraper(JobBoardScraper):
                 r"text=/\b(?:\d+\+?\s+)?(?:hour|day|week|month|year)s?\s+ago\b/i").first),
         )
 
+    def _fill_typeahead_location(self, location_field, location_text: str) -> bool:
+        """LinkedIn's location field only registers a value when a suggestion
+        is selected from the dropdown — typing text alone doesn't persist.
+        Returns True if a suggestion was successfully selected."""
+        if not location_text:
+            return False
+
+        location_field.click()
+        location_field.press_sequentially(location_text, delay=80)
+
+        # suggestions appear as a listbox after typing; give it a moment to populate
+        suggestion = self.page.locator("[role='listbox'] [role='option']").first
+        try:
+            suggestion.wait_for(state="visible", timeout=5000)
+            suggestion.click()
+            return True
+        except Exception as e:
+            print(f"WARNING: no location suggestion appeared for '{location_text}' ({e})")
+            return False
+
+    
+        
     def auto_apply(self, job_url: str, candidate: CandidateProfile, cv_path: str, llm: FallbackLLM, match_result: MatchResult, job_offer: JobOffer, raw_job: RawJob, dry_run: bool = True,) -> ApplicationLog:
         self.page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
         locator = self.page.get_by_text("No longer accepting applications", exact=False)
@@ -223,22 +245,50 @@ class LinkedInScraper(JobBoardScraper):
         easy_apply_btn.wait_for(state="visible", timeout=10000)
         easy_apply_btn.click()
 
-        fname_field = self.page.get_by_label("First name").or_(self.page.get_by_label("Prénom"))
-        lname_field = self.page.get_by_label("Last name").or_(self.page.get_by_label("Nom"))
-        phone_code_dropdown = self.page.get_by_label("Phone country code")
-        phone_number_field = self.page.get_by_label("Mobile phone number").or_(self.page.get_by_label("Numéro de téléphone portable"))
-        email_dropdown = self.page.get_by_label("Email address").or_(self.page.get_by_label("Adresse e-mail"))
-        location = self.page.get_by_label("Location").or_(self.page.get_by_label("Lieu"))
+        modal = self.page.locator("[data-testid='dialog-content']")
+        modal.wait_for(state="visible", timeout=10000)
+        self.sb.sleep(5)  # Allow modal content to fully render
+
+
+        fname_field = modal.get_by_label("First name").or_(self.page.get_by_label("Prénom"))
+        lname_field = modal.get_by_label("Last name").or_(self.page.get_by_label("Nom"))
+        phone_code_dropdown = modal.get_by_label("Phone country code")
+        phone_number_field = modal.locator("input[type='tel']").or_(self.page.get_by_label("Numéro de téléphone portable"))
+        email_dropdown = modal.get_by_label("Email address").or_(self.page.get_by_label("Adresse e-mail"))
+        location = modal.get_by_placeholder("Enter city or location")
 
         if fname_field.count() > 0 and fname_field.input_value().strip() == "":
+            print(f"Filling first name field with: {candidate.first_name}")
             fname_field.fill(candidate.first_name)
         if lname_field.count() > 0 and lname_field.input_value().strip() == "":
+            print(f"Filling last name field with: {candidate.last_name}")
             lname_field.fill(candidate.last_name)
         if phone_code_dropdown.count() > 0 and phone_code_dropdown.input_value().strip() == "":
-            phone_code_dropdown.select_option(value = candidate.phone_country_code)
+            print(f"Filling phone country code field with: {candidate.phone_country_code}")
+            phone_code_dropdown.select_option(value = candidate.phone_country_code.lower())
         if phone_number_field.count() > 0 and phone_number_field.input_value().strip() == "":
+            print(f"Filling phone number field with: {candidate.personal_information.phone}")
             phone_number_field.fill(candidate.personal_information.phone)
         if email_dropdown.count() > 0 and email_dropdown.input_value().strip() == "":
+            print(f"Filling email field with: {candidate.personal_information.email}")
             email_dropdown.select_option(value = candidate.personal_information.email)
         if location.count() > 0 and location.input_value().strip() == "":
-            location.fill(candidate.location)
+            print(f"Filling location field with: {candidate.personal_information.location}")
+            self._fill_typeahead_location(location, candidate.personal_information.location)
+
+        print({
+            "first_name": fname_field.input_value() if fname_field.count() > 0 else None,
+            "last_name": lname_field.input_value() if lname_field.count() > 0 else None,
+            "phone_country_code": phone_code_dropdown.input_value() if phone_code_dropdown.count() > 0 else None,
+            "phone_number": phone_number_field.input_value() if phone_number_field.count() > 0 else None,
+            "email": email_dropdown.input_value() if email_dropdown.count() > 0 else None,
+            "location": location.input_value() if location.count() > 0 else None
+        })
+
+        # Selects the span containing the exact text "Next"
+        next_button = self.page.get_by_text("Next", exact=True)
+        next_button.click()
+
+        self.sb.sleep(5)  # Allow next step to load
+        hidden_inputs = modal.locator("input[type='file']")
+        print(f"Hidden file inputs found: {hidden_inputs.count()}")

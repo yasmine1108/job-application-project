@@ -14,6 +14,7 @@ from src.models import (
 from pathlib import Path
 from langchain_core.prompts import ChatPromptTemplate
 import re
+import phonenumbers
 
 
 class CVExtractor:
@@ -50,6 +51,7 @@ Rules:
 - If no such explicit statement exists, return null.
 - If a short subtitle/tagline exists near the name (e.g. a field of study + job-seeking intent), 
   extract it as-is or near-verbatim - do not expand it into a longer paragraph.
+- Extract the candidate's location (city, and governorate/region if present) exactly as written near the name or contact details, e.g. 'Tunis, Tunisie'. If no location is stated anywhere in the CV, return null.
             """),
             ("human", """
 CV Markdown:
@@ -328,6 +330,7 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
         candidate_profile = populate_skill_evidence(candidate_profile)
         candidate_profile = normalize_profile_skills(candidate_profile)
         candidate_profile = enforce_standard_years_of_study(candidate_profile)
+        candidate_profile.personal_information.country_code = extract_phone_country_code(candidate_profile.personal_information.phone)
         # Cache the extracted profile
         cache_dir = Path("data/outputs")
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -340,6 +343,26 @@ CV Markdown (look for Languages / Langues / Spoken Languages sections, and any m
             f.write(candidate_profile.model_dump_json(indent=2))
         
         return candidate_profile
+
+
+def extract_phone_country_code(phone: str | None) -> str | None:
+    """Returns ISO 3166-1 alpha-2 (e.g. 'TN') only when the phone string
+    itself contains an explicit country calling code (+216..., 00216...).
+    Returns None otherwise — do not guess from a bare local number."""
+    if not phone or not phone.strip():
+        return None
+    cleaned_phone = phone.strip()
+
+    # Convert leading IDD prefix "00" to "+" standard E.164 notation
+    if cleaned_phone.startswith("00"):
+        cleaned_phone = "+" + cleaned_phone[2:]
+    try:
+        parsed = phonenumbers.parse(cleaned_phone, None)  # region=None forces explicit-code-only parsing
+        if phonenumbers.is_valid_number(parsed):
+            return phonenumbers.region_code_for_number(parsed)
+    except phonenumbers.NumberParseException:
+        pass
+    return None
 
 STANDARD_YEARS_BY_DEGREE_LEVEL = {
     "high_school": None,

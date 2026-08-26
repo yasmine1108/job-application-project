@@ -1,6 +1,7 @@
 # # from src.data_helpers import get_job_offer_by_id, get_raw_job_by_id, load_matching_profile_from_example
 import json
 
+from src.data_helpers import get_job_offer_by_id, get_match_result_by_job_id_from_file, get_raw_job_by_id, load_candidate_profile_from_example
 from src.pipeline import run_pipeline_for_candidate
 from src.models import CandidateProfile
 # from src.models_job import JobOffer, RawJob
@@ -92,18 +93,49 @@ if __name__ == "__main__":
     )
     register_scraper("tanitjobs.com", TanitJobsScraper)
     register_scraper("linkedin.com", LinkedInScraper)
-    run_pipeline_for_candidate(
-        candidate=candidate_profile,
-        keyword="AI Engineer",
-        preferences=preferences,
-        llm=fallback_llm,
-        job_offer_extractor=job_extractor,  # Replace with actual job offer extractor
-        matches_output_path="data/outputs/tanitjobs_match_results.json",
-        applications_log_path="data/outputs/tanitjobs_applications.json",
-        cv_path="data/cv/example_cv.pdf",
-        board_domains=["tanitjobs.com"],  # Specify the job board domains to scrape
+    # run_pipeline_for_candidate(
+    #     candidate=candidate_profile,
+    #     keyword="AI Engineer",
+    #     preferences=preferences,
+    #     llm=fallback_llm,
+    #     job_offer_extractor=job_extractor,  # Replace with actual job offer extractor
+    #     matches_output_path="data/outputs/tanitjobs_match_results.json",
+    #     applications_log_path="data/outputs/tanitjobs_applications.json",
+    #     cv_path="data/cv/example_cv.pdf",
+    #     board_domains=["tanitjobs.com"],  # Specify the job board domains to scrape
+    # )
+    job_id = "4427131133"
+    job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
+    candidate = load_candidate_profile_from_example(
+        "data/outputs/example_cv_profile.json"
     )
-
+    raw_job = get_raw_job_by_id(
+        job_id, "data/outputs/linkedin_raw_job_list.json"
+    )
+    job_offer = get_job_offer_by_id(
+        job_id, "data/outputs/linkedin_structured_jobs.json"
+    )
+    match_result = get_match_result_by_job_id_from_file(
+        job_id,
+        "data/outputs/linkedin_match_results.json",
+        candidate_id=candidate.candidate_id,
+    )
+    scraper = LinkedInScraper()
+    scraper.start_browser()
+    try:
+        scraper.ensure_logged_in()
+        log = scraper.auto_apply(
+            job_url=job_url,
+            candidate=candidate,
+            cv_path="data/outputs/example_cv.pdf",
+            llm=None,
+            match_result=match_result,
+            job_offer=job_offer,
+            raw_job=raw_job,
+            dry_run=True,
+        )
+    finally:
+        scraper.close_browser()
 #     # jobs, raw_by_url = load_jobs(
 #     #     "data/outputs/linkedin_structured_jobs.json",
 #     #     "data/outputs/linkedin_raw_job_list.json",

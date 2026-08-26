@@ -22,6 +22,8 @@ class ParsedDocument:
 class PersonalInformation(BaseModel):
     full_name: str | None
     email: str | None
+    country_code: str | None
+    location: str | None
     phone: str | None
     linkedin: str | None
     github: str | None

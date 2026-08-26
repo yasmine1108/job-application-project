@@ -25,6 +25,12 @@ from src.models_job import JobOffer
 from src.matchers.matcher import MatchResult
 from src.llm.fallback import FallbackLLM
 
+from pathlib import Path
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+
 
 class CoverLetterDraft(BaseModel):
     letter: str = Field(
@@ -197,3 +203,33 @@ def generate_cover_letter(
 
     draft: CoverLetterDraft = llm.generate_structured(system_prompt, prompt, CoverLetterDraft)
     return draft.letter
+
+
+def save_cover_letter_as_pdf(letter_text: str, candidate_name: str, output_dir: str | Path = "data/outputs") -> Path:
+    """Renders the generated cover letter text to a simple, clean PDF
+    ready for upload. No template/branding — LinkedIn's Easy Apply just
+    needs a readable document, not a styled deliverable."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = "".join(c if c.isalnum() or c in " -_" else "" for c in (candidate_name or "candidate")).strip()
+    pdf_path = output_dir / f"cover_letter_{safe_name.replace(' ', '_')}.pdf"
+
+    doc = SimpleDocTemplate(
+        str(pdf_path), pagesize=A4,
+        topMargin=2.5 * cm, bottomMargin=2.5 * cm,
+        leftMargin=2.5 * cm, rightMargin=2.5 * cm,
+    )
+    styles = getSampleStyleSheet()
+    body_style = styles["Normal"]
+    body_style.leading = 16
+
+    story = []
+    for paragraph in letter_text.split("\n\n"):
+        cleaned = paragraph.strip().replace("\n", "<br/>")
+        if cleaned:
+            story.append(Paragraph(cleaned, body_style))
+            story.append(Spacer(1, 12))
+
+    doc.build(story)
+    return pdf_path

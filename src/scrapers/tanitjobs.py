@@ -239,31 +239,32 @@ class TanitJobsScraper(JobBoardScraper):
         print(f"Sauvegarde terminée. Total général : {len(existing)} offres ({added} ajoutées).")
 
     def extract_job_list(self, collected_links):
-        # with open(self.output_file, "r", encoding="utf-8") as f:
-        #     cards = json.load(f)
         cards = collected_links
-
         details_file = "data/outputs/tanitjobs_raw_job_list.json"
         existing = []
         if os.path.exists(details_file) and os.path.getsize(details_file) > 0:
             with open(details_file, "r", encoding="utf-8") as f:
                 existing = json.load(f)
-        done_urls = {item["job_url"] for item in existing}
+        done_urls = {item["job_url"]: item for item in existing}
 
+        newly_collected = []
         for card in cards:
             if card["job_url"] in done_urls:
+                newly_collected.append(done_urls[card["job_url"]])
                 continue
             self.sb.sleep(3)
             details = self.extract_job_details(card["job_url"])
-            existing.append({**card, **details})
+            full_item = {**card, **details}
+            existing.append(full_item)
+            newly_collected.append(full_item)
 
             os.makedirs(os.path.dirname(details_file), exist_ok=True)
             with open(details_file, "w", encoding="utf-8") as f:
                 json.dump(existing, f, indent=4, ensure_ascii=False)
 
-        print(f"Total de cartes détaillées collectées : {len(existing)}")
-        return [RawJob.model_validate(item) for item in existing]
-
+        print(f"Total de cartes détaillées collectées : {len(newly_collected)}")
+        return [RawJob.model_validate(item) for item in newly_collected]
+    
     def extract_job_details(self, job_url: str) -> dict:
         self.page.goto(job_url,wait_until="domcontentloaded", timeout=30000)
         self.sb.sleep(3)
