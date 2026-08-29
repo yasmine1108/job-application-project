@@ -79,6 +79,7 @@ Rules:
 - ALWAYS attempt to fill "degree_level" and "years_of_study" for every entry, even when the CV doesn't state them explicitly - infer them from the degree name using the degree_level guidance below. Only leave them null if the degree name is too ambiguous to classify at all.
 - If a field is missing, return null. Never invent information.
 - Never return an empty list if any education information exists in the text below.
+- Set is_current=true if the CV indicates this role/program is ongoing (e.g. 'Present', 'Aujourd'hui', 'En cours', 'Actuel', or an end date matching the CV's writing period). Leave end_date as whatever the CV literally states in that case, if anything.
 
 degree_level guidance: {degree_level_guidance}
 
@@ -118,6 +119,7 @@ Rules:
 - Do NOT include entries from an "Academic Projects" / "Projets Académiques" / "Projets Personnels" section 
 - those are handled separately and must be excluded here entirely, even if they resemble structured entries.
 - A red flag that an entry does NOT belong here: the "company" would be a school/university and the entry describes a class project rather than an employment relationship.
+- Set is_current=true if the CV indicates this role/program is ongoing (e.g. 'Present', 'Aujourd'hui', 'En cours', 'Actuel', or an end date matching the CV's writing period). Leave end_date as whatever the CV literally states in that case, if anything.
             """),
             ("human", """
 CV Markdown (look for Experience / Experience Professionnelle sections):

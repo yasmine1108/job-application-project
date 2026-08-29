@@ -42,6 +42,7 @@ class Education(BaseModel):
     field_of_study: str | None
     start_date: str | None
     end_date: str | None
+    is_current: bool = Field(default=False, description="True if the candidate is still in this role as of the CV's writing.")
     description: str | None
 
 class Experience(BaseModel):
@@ -52,6 +53,7 @@ class Experience(BaseModel):
     employment_type: str | None
     start_date: str | None
     end_date: str | None
+    is_current: bool = Field(default=False, description="True if the candidate is still in this role as of the CV's writing.")
     duration_months: int | None
     description: str | None
     responsibilities: list[str]

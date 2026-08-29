@@ -127,8 +127,8 @@ if __name__ == "__main__":
         log = scraper.auto_apply(
             job_url=job_url,
             candidate=candidate,
-            cv_path="data/outputs/example_cv.pdf",
-            llm=None,
+            cv_path="data/cv/example_cv.pdf",
+            llm=fallback_llm,
             match_result=match_result,
             job_offer=job_offer,
             raw_job=raw_job,
