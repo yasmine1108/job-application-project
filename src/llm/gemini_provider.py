@@ -9,7 +9,10 @@ class GeminiProvider(BaseLLMProvider):
     name = "gemini"
 
     def __init__(self, api_key: str, model_name: str = "gemini-3.5-flash"):
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=60_000),
+        )
         self.model_name = model_name
         self.name = f"gemini:{model_name}"
 

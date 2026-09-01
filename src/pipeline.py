@@ -56,8 +56,8 @@ def run_pipeline_for_candidate(
         scraper.start_browser()
         scraper.ensure_logged_in()
         try:
-            collected_links = scraper.search_and_collect_links(keyword)  # persists link list internally
-            raw_jobs = scraper.extract_job_list(collected_links)       # list[RawJob], in-memory (Phase 2 fix)
+            collected_links = scraper.search_and_collect_links(keyword) 
+            raw_jobs = scraper.extract_job_list(collected_links)      
         finally:
             scraper.close_browser()
         all_raw_jobs.extend(raw_jobs)
@@ -80,7 +80,10 @@ def run_pipeline_for_candidate(
         raw_jobs_by_url=raw_jobs_by_url,
         preferences=preferences,
     )
-
+    match_results = [
+    r for r in match_results
+    if r.job_url in raw_jobs_by_url and r.job_url in job_offers_by_url
+    ]
     # --- Step 5: tiering, with an "already applied" gate up front ---
     already_applied_urls = {
         log.job_url
@@ -105,6 +108,15 @@ def run_pipeline_for_candidate(
     # --- Step 6: auto-apply the high-confidence tier ---
     applied_logs = []
     for r in to_auto_apply:
+        raw_job = raw_jobs_by_url.get(r.job_url)
+        job_offer = job_offers_by_url.get(r.job_url)
+        if raw_job is None or job_offer is None:
+            print(
+                f"WARNING: {r.job_url} was matched in a previous run but wasn't "
+                "scraped/extracted in this run -- skipping auto-apply. Re-run a "
+                "search that surfaces this job again to retry it."
+            )
+            continue
         scraper = get_scraper_for_url(r.job_url)
         scraper.start_browser()
         scraper.ensure_logged_in()
@@ -125,8 +137,8 @@ def run_pipeline_for_candidate(
 
 
 
-    # return {
-    #     "auto_applied": applied_logs,
-    #     "to_confirm": to_confirm,   # exactly the tier LangGraph's interrupt() will consume next (Phase 5)
-    #     "discarded": discarded,
-    # }
+    return {
+        "auto_applied": applied_logs,
+        "to_confirm": to_confirm,   
+        "discarded": discarded,
+    }

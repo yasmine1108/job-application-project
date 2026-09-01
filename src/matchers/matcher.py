@@ -15,7 +15,9 @@ Design:
 """
 
 import json
+
 from pathlib import Path
+
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +26,7 @@ from src.llm.fallback import FallbackLLM
 from src.models import MatchingProfile, SpokenLanguage
 from src.models_job import EmploymentType, JobOffer, JobStatus, RawJob, WorkArrangement
 import math
+from urllib.parse import urlparse
 
 # approximate centroid coordinates (lat, lon) for each Tunisian governorate
 TUNISIA_GOVERNORATE_COORDS: dict[str, tuple[float, float]] = {
@@ -178,6 +181,8 @@ def compute_apply_priority(overall_score: float, easy_apply: bool) -> float:
 
 COMMON_LANGUAGES = {"french", "français", "english", "anglais"}
 
+def _is_linkedin_job(job: JobOffer) -> bool:
+    return "linkedin.com" in urlparse(job.job_url).netloc
 
 def apply_hard_filters(
     job: JobOffer,
@@ -186,6 +191,9 @@ def apply_hard_filters(
 ) -> str | None:
     if job.job_status == JobStatus.CLOSED:
         return "Job is no longer accepting applications"
+
+    if _is_linkedin_job(job) and not job.easy_apply:
+        return "LinkedIn job is not Easy Apply -- auto-apply flow doesn't support it"
 
     # --- employment type preference ---
     if (
@@ -323,7 +331,7 @@ class Matcher:
         self,
         llm: FallbackLLM,
         output_path: str | Path,
-        batch_size: int = 8,
+        batch_size: int = 2,
     ):
         self.llm = llm
         self.output_path = Path(output_path)
@@ -333,7 +341,9 @@ class Matcher:
             self, candidate: MatchingProfile, jobs_for_matching: list[JobForMatching]
         ) -> dict[str, MatchJudgment]:
             prompt = build_match_prompt(candidate, jobs_for_matching)
+            print(f"Calling LLM for batch of {len(jobs_for_matching)} jobs...")
             batch = self.llm.generate_structured(MATCH_SYSTEM_PROMPT, prompt, MatchJudgmentBatch)
+            print(f"LLM returned {len(batch.results)} judgments for {len(jobs_for_matching)} jobs")
 
             url_by_job_id = {j.job_id: j.job_url for j in jobs_for_matching}
             if len(url_by_job_id) != len(jobs_for_matching):
@@ -358,12 +368,14 @@ class Matcher:
     ) -> list[MatchResult]:
         results, rejected = self._load_existing(candidate_id)
         already_done = {r.job_url for r in results} | {r.job_url for r in rejected}
+        print(f"Starting matching for candidate {candidate_id}: {len(already_done)} jobs already scored/rejected, {len(jobs) - len(already_done)} jobs to process")
 
         to_score: list[JobOffer] = []
         for job in jobs:
             if job.job_url in already_done:
                 continue
             reason = apply_hard_filters(job, candidate_langs,preferences)
+            print(f"Job {job.job_url} rejected: {reason}" if reason else f"Job {job.job_url} passed hard filters")
             if reason:
                 rejected.append(RejectedMatch(job_url=job.job_url, candidate_id=candidate_id, rejection_reason=reason))
             else:
@@ -373,6 +385,7 @@ class Matcher:
 
         for i in range(0, len(to_score), self.batch_size):
             chunk = to_score[i : i + self.batch_size]
+            print(f"Scoring batch {i}-{i + len(chunk)} of {len(to_score)} jobs for candidate {candidate_id}...")
             jobs_for_matching = [
                 JobForMatching(
                     job_url=j.job_url,
@@ -385,6 +398,7 @@ class Matcher:
 
             try:
                 judged_by_url = self.match_batch(candidate, jobs_for_matching)
+                print(f"Batch {i}-{i + len(chunk)} scored successfully")
             except Exception as e:
                 print(f"Batch {i}-{i + len(chunk)} failed ({e}), saving progress and stopping.")
                 self._save(candidate_id, results, rejected)
@@ -396,6 +410,7 @@ class Matcher:
                     print(f"WARNING: no judgment returned for {job.job_url}, skipping")
                     continue
                 overall = compute_overall_score(judgment)
+                print(f"Job {job.job_url} scored: overall={overall:.2f}, skills={judgment.skills_fit.score:.2f}, experience={judgment.experience_fit.score:.2f}, education={judgment.education_fit.score:.2f}")
                 results.append(
                     MatchResult(
                         job_url=job.job_url,
@@ -407,7 +422,7 @@ class Matcher:
                 )
 
             self._save(candidate_id, results, rejected)
-
+        print(f"Matching complete: {len(results)} results, {len(rejected)} rejected")
         return results
 
     # -- persistence -------------------------------------------------------

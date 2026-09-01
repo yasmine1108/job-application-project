@@ -8,7 +8,7 @@ class GroqProvider(BaseLLMProvider):
     name = "groq"
 
     def __init__(self, api_key: str, model_name: str = "openai/gpt-oss-120b"):
-        self.client = Groq(api_key=api_key)
+        self.client = Groq(api_key=api_key, timeout=60)
         self.model_name = model_name
         self.name = f"groq:{model_name}"
 

@@ -205,7 +205,7 @@ def generate_cover_letter(
     return draft.letter
 
 
-def save_cover_letter_as_pdf(letter_text: str, candidate_name: str, output_dir: str | Path = "data/cover_latters") -> Path:
+def save_cover_letter_as_pdf(letter_text: str, candidate_name: str, output_dir: str | Path = "data/cover_letters") -> Path:
     """Renders the generated cover letter text to a simple, clean PDF
     ready for upload. No template/branding — LinkedIn's Easy Apply just
     needs a readable document, not a styled deliverable."""

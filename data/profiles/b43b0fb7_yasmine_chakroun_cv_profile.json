@@ -1,0 +1,357 @@
+{
+  "candidate_id": "113a5e69-0b23-4cdf-8fc0-6ed941baacae",
+  "personal_information": {
+    "full_name": "Yasmine Chakroun",
+    "email": "yasmine.chakroun@fsb.ucar.tn",
+    "country_code": "TN",
+    "location": "Ariana, Tunis",
+    "phone": "+216 24 305 500",
+    "linkedin": "https://www.linkedin.com/in/yasmine-chakroun-789566293/",
+    "github": "https://github.com/yasmine1108"
+  },
+  "professional_summary": "I am a student looking for a summer internship.",
+  "education": [
+    {
+      "degree": "Diplôme d’Ingénieur en Génie Logiciel et Ingénierie des Données (Prévu en 2027)",
+      "degree_level": "master",
+      "years_of_study": 5,
+      "institution": "Faculté des Sciences de Bizerte (FSB)",
+      "field_of_study": "Génie Logiciel et Ingénierie des Données",
+      "start_date": "Sept. 2024",
+      "end_date": "Present",
+      "is_current": false,
+      "description": null
+    },
+    {
+      "degree": "Classe Préparatoire Intégrée (CPI)",
+      "degree_level": "short_cycle",
+      "years_of_study": 2,
+      "institution": "Faculté des Sciences de Bizerte (FSB)",
+      "field_of_study": null,
+      "start_date": "Sept. 2022",
+      "end_date": "Mai 2024",
+      "is_current": false,
+      "description": "Major de Promotion"
+    },
+    {
+      "degree": "Baccalauréat en Mathématiques",
+      "degree_level": "high_school",
+      "years_of_study": null,
+      "institution": "Lycée Pilote de l’Ariana",
+      "field_of_study": "Mathématiques",
+      "start_date": "Sept. 2018",
+      "end_date": "Juin 2022",
+      "is_current": false,
+      "description": "Mention Bien"
+    }
+  ],
+  "experience": [
+    {
+      "job_title": "Développeur Python / Odoo",
+      "company": "SRA Integration",
+      "domain": null,
+      "location": "Tunis, Tunisie",
+      "employment_type": "Stage d’Été",
+      "start_date": "Juillet 2025",
+      "end_date": "Août 2025",
+      "is_current": false,
+      "duration_months": 2,
+      "description": null,
+      "responsibilities": [
+        "Migration technique : Prise en charge de la migration du module Helpdesk (gestion des tickets d’assistance) depuis la plateforme Redmine vers l’ERP Odoo.",
+        "Développement Odoo : Conception et personnalisation de sous-modules Odoo via le mécanisme d’héritage pour répondre aux besoins métiers spécifiques du client."
+      ],
+      "technologies": [
+        "Python",
+        "Odoo",
+        "Redmine"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "python",
+      "category": "programming_language",
+      "evidence": [
+        "Used in role: Développeur Python / Odoo at SRA Integration",
+        "Used in project: Système multi-agent pour l’administration académique",
+        "Used in project: Modèle ML de Prédiction de Réclamations d’Assurance"
+      ]
+    },
+    {
+      "name": "Java",
+      "category": "programming_language",
+      "evidence": null
+    },
+    {
+      "name": "C/C++",
+      "category": "programming_language",
+      "evidence": null
+    },
+    {
+      "name": "SQL",
+      "category": "programming_language",
+      "evidence": null
+    },
+    {
+      "name": "javascript",
+      "category": "programming_language",
+      "evidence": null
+    },
+    {
+      "name": "Dart",
+      "category": "programming_language",
+      "evidence": null
+    },
+    {
+      "name": "react",
+      "category": "tool",
+      "evidence": [
+        "Used in project: Système multi-agent pour l’administration académique"
+      ]
+    },
+    {
+      "name": "Angular",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "node.js",
+      "category": "tool",
+      "evidence": [
+        "Used in project: Application Web “LinkedIn Clone”"
+      ]
+    },
+    {
+      "name": "Express",
+      "category": "tool",
+      "evidence": [
+        "Used in project: Application Web “LinkedIn Clone”"
+      ]
+    },
+    {
+      "name": "Flutter",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "Android Studio",
+      "category": "tool",
+      "evidence": [
+        "Used in project: Prototype IoT & Mobile “Smart Bus”"
+      ]
+    },
+    {
+      "name": "Spring",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "postgresql",
+      "category": "domain",
+      "evidence": [
+        "Used in project: Système multi-agent pour l’administration académique"
+      ]
+    },
+    {
+      "name": "MongoDB",
+      "category": "domain",
+      "evidence": [
+        "Used in project: Application Web “LinkedIn Clone”"
+      ]
+    },
+    {
+      "name": "Firebase",
+      "category": "tool",
+      "evidence": [
+        "Used in project: Prototype IoT & Mobile “Smart Bus”",
+        "…physiques pour collecter et transmettre des données vers Firebase."
+      ]
+    },
+    {
+      "name": "Docker",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "kubernetes",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "amazon web services",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "MLflow",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "DVC",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "KVM",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "Hadoop",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "Hive",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "Pig",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "HBase",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "Pentaho Spoon",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "JasperReports",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "Git",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "GitHub",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "Selenium",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "EVE-NG",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "pfSense",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "LangChain",
+      "category": "tool",
+      "evidence": [
+        "Conception d’un chatbot exploitant LangChain, Ollama et ChromaDB pour répond aux questions relatives…"
+      ]
+    },
+    {
+      "name": "Ollama",
+      "category": "tool",
+      "evidence": [
+        "Conception d’un chatbot exploitant LangChain, Ollama et ChromaDB pour répond aux questions relatives aux…"
+      ]
+    },
+    {
+      "name": "ChromaDB",
+      "category": "tool",
+      "evidence": [
+        "Conception d’un chatbot exploitant LangChain, Ollama et ChromaDB pour répond aux questions relatives aux étudiants et aux…"
+      ]
+    },
+    {
+      "name": "Machine Learning",
+      "category": "tool",
+      "evidence": [
+        "Entraînement d’un modèle de machine learning destiné à estimer le temps d’arrivée des bus à partir des…"
+      ]
+    },
+    {
+      "name": "OpenMP",
+      "category": "tool",
+      "evidence": null
+    },
+    {
+      "name": "MPI",
+      "category": "tool",
+      "evidence": null
+    }
+  ],
+  "projects": [
+    {
+      "title": "Système multi-agent pour l’administration académique",
+      "summary": null,
+      "highlights": [
+        "Développement d’un agent capable de générer automatiquement des calendriers d’examens en respectant des contraintes académiques et organisationnelles.",
+        "Conception d’un chatbot exploitant LangChain, Ollama et ChromaDB pour répond aux questions relatives aux étudiants et aux enseignants à partir de données institutionnelles."
+      ],
+      "technologies": [
+        "Python",
+        "FastAPI",
+        "React",
+        "PostgreSQL"
+      ],
+      "github": "https://github.com/yasmine1108"
+    },
+    {
+      "title": "Prototype IoT & Mobile “Smart Bus”",
+      "summary": null,
+      "highlights": [
+        "Conception d’un prototype de bus intelligent basé sur Raspberry Pi 4 et des capteurs physiques pour collecter et transmettre des données vers Firebase.",
+        "Développement d’une application Android permettant la visualisation en temps réel des données collectées.",
+        "Entraînement d’un modèle de machine learning destiné à estimer le temps d’arrivée des bus à partir des données de circulation et d’exploitation."
+      ],
+      "technologies": [
+        "Android Studio",
+        "Raspberry Pi 4",
+        "Firebase"
+      ],
+      "github": null
+    },
+    {
+      "title": "Modèle ML de Prédiction de Réclamations d’Assurance",
+      "summary": null,
+      "highlights": [
+        "Développement d’un modèle de classification binaire visant à prédire la probabilité de réclamation pour des établissements assurés.",
+        "Réalisation des étapes de nettoyage, transformation et feature engineering avec Pandas et Scikit-Learn.",
+        "Comparaison de plusieurs algorithmes de classification et sélection du meilleur modèle."
+      ],
+      "technologies": [
+        "Python",
+        "Pandas",
+        "Scikit-Learn"
+      ],
+      "github": null
+    },
+    {
+      "title": "Application Web “LinkedIn Clone”",
+      "summary": null,
+      "highlights": [
+        "Conception d’une plateforme inspirée de LinkedIn permettant la publication de contenus, la gestion des relations professionnelles et la candidature à des offres d’emploi."
+      ],
+      "technologies": [
+        "Node.js",
+        "Express",
+        "MongoDB"
+      ],
+      "github": "https://github.com/yasmine1108"
+    }
+  ],
+  "certifications": [],
+  "spoken_languages": []
+}

@@ -1,4 +1,4 @@
-# # from src.data_helpers import get_job_offer_by_id, get_raw_job_by_id, load_matching_profile_from_example
+from src.data_helpers import get_job_offer_by_id, get_raw_job_by_id, load_matching_profile_from_example
 import json
 
 from src.data_helpers import get_job_offer_by_id, get_match_result_by_job_id_from_file, get_raw_job_by_id, load_candidate_profile_from_example
@@ -72,17 +72,10 @@ if __name__ == "__main__":
     ])
     job_extractor = JobOfferExtractor(
         llm=fallback_llm,
-        output_path="data/outputs/tanitjobs_structured_jobs.json",
+        output_path="data/outputs/structured_jobs.json",
         batch_size=8,
     )
 
-#     # job_extractor.extract_jobs_from_file()
-
-#     # job_offer = get_job_offer_by_id("4413017677")
-#     # raw_job = get_raw_job_by_id("4413017677")
-#     # matching = load_matching_profile_from_example()
-#     # matcher: Matcher = Matcher()
-#     # print(matcher.match(job_offer,raw_job,matching,["full-time"]))
 
     candidate_profile = load_candidate("data/outputs/example_cv_profile.json")
     preferences = CandidatePreferences(
@@ -93,17 +86,18 @@ if __name__ == "__main__":
     )
     register_scraper("tanitjobs.com", TanitJobsScraper)
     register_scraper("linkedin.com", LinkedInScraper)
-    # run_pipeline_for_candidate(
-    #     candidate=candidate_profile,
-    #     keyword="AI Engineer",
-    #     preferences=preferences,
-    #     llm=fallback_llm,
-    #     job_offer_extractor=job_extractor,  # Replace with actual job offer extractor
-    #     matches_output_path="data/outputs/tanitjobs_match_results.json",
-    #     applications_log_path="data/outputs/tanitjobs_applications.json",
-    #     cv_path="data/cv/example_cv.pdf",
-    #     board_domains=["tanitjobs.com"],  # Specify the job board domains to scrape
-    # )
+    result = run_pipeline_for_candidate(
+        candidate=candidate_profile,
+        keyword="AI Engineer",
+        preferences=preferences,
+        llm=fallback_llm,
+        job_offer_extractor=job_extractor,  
+        matches_output_path="data/outputs/tanitjobs_match_results.json",
+        applications_log_path="data/outputs/tanitjobs_applications.json",
+        cv_path="data/cv/example_cv.pdf",
+        board_domains=["tanitjobs.com","linkedin.com"],  # Specify the job board domains to scrape
+    )
+    print(f"applied to {len(result['auto_applied'])} jobs, skipped {len(result['to_confirm'])} jobs, failed {len(result['discarded'])} jobs")
     job_id = "4427131133"
     job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
     candidate = load_candidate_profile_from_example(
@@ -115,49 +109,51 @@ if __name__ == "__main__":
     job_offer = get_job_offer_by_id(
         job_id, "data/outputs/linkedin_structured_jobs.json"
     )
-    match_result = get_match_result_by_job_id_from_file(
-        job_id,
-        "data/outputs/linkedin_match_results.json",
-        candidate_id=candidate.candidate_id,
-    )
-    scraper = LinkedInScraper()
-    scraper.start_browser()
-    try:
-        scraper.ensure_logged_in()
-        log = scraper.auto_apply(
-            job_url=job_url,
-            candidate=candidate,
-            cv_path="data/cv/example_cv.pdf",
-            llm=fallback_llm,
-            match_result=match_result,
-            job_offer=job_offer,
-            raw_job=raw_job,
-            dry_run=True,
-        )
-    finally:
-        scraper.close_browser()
+    # match_result = get_match_result_by_job_id_from_file(
+    #     job_id,
+    #     "data/outputs/linkedin_match_results.json",
+    #     candidate_id=candidate.candidate_id,
+    # )
+    # scraper = LinkedInScraper()
+    # scraper.start_browser()
+    # try:
+    #     scraper.ensure_logged_in()
+    #     log = scraper.auto_apply(
+    #         job_url=job_url,
+    #         candidate=candidate,
+    #         cv_path="data/cv/example_cv.pdf",
+    #         llm=fallback_llm,
+    #         match_result=match_result,
+    #         job_offer=job_offer,
+    #         raw_job=raw_job,
+    #         dry_run=True,
+    #     )
+    # finally:
+    #     scraper.close_browser()
 #     # jobs, raw_by_url = load_jobs(
 #     #     "data/outputs/linkedin_structured_jobs.json",
 #     #     "data/outputs/linkedin_raw_job_list.json",
 #     # )
 
-#     # matcher = Matcher(
-#     #     llm=fallback_llm,
-#     #     output_path="data/outputs/v2_linkedin_match_results.json",
-#     #     batch_size=8,
-#     # )
+    # matcher = Matcher(
+    #     llm=fallback_llm,
+    #     output_path="data/outputs/v2_linkedin_match_results.json",
+    #     batch_size=8,
+    # )
+    # matching_profile = load_matching_profile_from_example(
+    #     "data/outputs/example_cv_profile.json"
+    # )
+    # results = matcher.run(
+    #     candidate_id=candidate_profile.personal_information.email,
+    #     candidate=matching_profile,
+    #     candidate_langs=matching_profile.spoken_languages,
+    #     jobs=[job_offer],
+    #     raw_jobs_by_url={job_offer.job_url: raw_job},
+    #     preferences=preferences,
+    # )
 
-#     # results = matcher.run(
-#     #     candidate_id=candidate_profile.personal_information.email,
-#     #     candidate=matching_profile,
-#     #     candidate_langs=matching_profile.spoken_languages,
-#     #     jobs=jobs,
-#     #     raw_jobs_by_url=raw_by_url,
-#     #     preferences=preferences,
-#     # )
-
-#     # for r in sorted(results, key=lambda r: r.overall_score, reverse=True):
-#     #     print(f"{r.overall_score:.2f} | {r.judgment.summary[:80]} | {r.job_url}")
+    # for r in sorted(results, key=lambda r: r.overall_score, reverse=True):
+    #     print(f"{r.overall_score:.2f} | {r.judgment.summary[:80]} | {r.job_url}")
 
 
 # from config.settings import Settings

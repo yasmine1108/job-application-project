@@ -16,10 +16,10 @@ import unicodedata
 
 EMPLOYMENT_TYPE_TRANSLATIONS: dict[str, str] = {
     "temps plein": "full-time",
-    "cdi": "full-time",        # permanent contract — closest enum fit
-    "cdd": "contract",         # fixed-term contract (not seen yet, but will show up)
+    "cdi": "full-time",        
+    "cdd": "contract",         
     "stage": "internship",
-    "sivp": "internship",      # subsidized grad integration program — closest fit, raw string preserved separately
+    "sivp": "internship",  
     "intérim": "temporary",
     "temps partiel": "part-time",
     "freelance": "contract",
@@ -48,7 +48,7 @@ def translate_employment_type(raw: str | None) -> tuple[str | None, str | None]:
     return normalized, raw.strip()
 
 WORK_ARRANGEMENT_REMOTE_KEYWORDS = {"remote", "teletravail", "100 remote"}
-WORK_ARRANGEMENT_HYBRID_KEYWORDS = {"hybride", "hybrid"}  # not confirmed present yet, but cheap to guard for
+WORK_ARRANGEMENT_HYBRID_KEYWORDS = {"hybride", "hybrid"} 
 
 
 def infer_work_arrangement(location: str | None,title: str | None) -> str:
@@ -157,7 +157,7 @@ class TanitJobsScraper(JobBoardScraper):
 
         return page_collected
 
-    def search_and_collect_links(self, keyword, debug=True, cards_per_page_limit=2, max_pages=None):
+    def search_and_collect_links(self, keyword, debug=True, cards_per_page_limit=None, max_pages=None):
         """
         cards_per_page_limit: cap cards read per page (for quickly testing
         a single page's parsing logic). None = read every card on the page.
@@ -170,9 +170,10 @@ class TanitJobsScraper(JobBoardScraper):
             cards_per_page_limit = cards_per_page_limit if cards_per_page_limit is not None else 5
             max_pages = max_pages if max_pages is not None else 1
 
-        logo_link = self.page.locator("a[href='https://www.tanitjobs.com']")
-        logo_link.wait_for(state="visible")
-        logo_link.click()
+        # logo_link = self.page.locator("a[href='https://www.tanitjobs.com']")
+        # logo_link.wait_for(state="visible")
+        # logo_link.click()
+        self.page.goto("https://www.tanitjobs.com/", wait_until="domcontentloaded", timeout=30000)
         search_input = self.page.get_by_placeholder("Mots Clés")
         search_input.wait_for(state="visible")
         search_input.fill(keyword)

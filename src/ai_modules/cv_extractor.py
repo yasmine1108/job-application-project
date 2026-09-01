@@ -52,6 +52,7 @@ Rules:
 - If a short subtitle/tagline exists near the name (e.g. a field of study + job-seeking intent), 
   extract it as-is or near-verbatim - do not expand it into a longer paragraph.
 - Extract the candidate's location (city, and governorate/region if present) exactly as written near the name or contact details, e.g. 'Tunis, Tunisie'. If no location is stated anywhere in the CV, return null.
+- If the CV contains a phone number, extract it exactly as written (including any country code or formatting). If no phone number is present, return null.
             """),
             ("human", """
 CV Markdown:

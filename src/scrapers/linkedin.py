@@ -17,7 +17,7 @@ from src.matchers.matcher import MatchResult
 from src.models import CandidateProfile, Experience, Education
 from src.scrapers.job_board_scraper import JobBoardScraper
 from src.scrapers.base_scraper import BaseScraper
-from src.models_job import JobOffer, RawJob
+from src.models_job import JobOffer, JobStatus, RawJob
 from config.settings import Settings
 
 
@@ -130,6 +130,7 @@ class LinkedInScraper(JobBoardScraper):
         self.password = Settings.LINKEDIN_PASSWORD
         self.output_file = "data/outputs/linkedin_links.json"
         self.jobs_list_file = "data/outputs/linkedin_raw_job_list.json"
+        self.structured_jobs = "data/outputs/structured_jobs.json"
         self.applications_output_path = "data/outputs/linkedin_applications.json"
         self.field_fill_log_path = "data/outputs/linkedin_field_fills.json"
 
@@ -167,12 +168,19 @@ class LinkedInScraper(JobBoardScraper):
 
         print(f"Titre de la page : {self.page.title()}")
 
-    def search_and_collect_links(self, keyword):
-        self.sb.sleep(20)
+    def search_and_collect_links(self, keyword, debug=True, max_number_links=None):
+        if debug: 
+            max_number_links = max_number_links if max_number_links is not None else 5
+        self.sb.sleep(5)
+# Locate and click the fake search button trigger
+        search_trigger = self.page.get_by_role("button", name="Search", exact=True)
+        search_trigger.wait_for(state="visible")
+        search_trigger.click()
         search_input = self.page.get_by_placeholder("Search")
         search_input.wait_for(state="visible")
         search_input.fill(keyword)
         search_input.press("Enter")
+        print(f"Recherche de liens pour le mot-clé : {keyword}")
         jobsbuttonvisible = self.page.get_by_role("radio", name="Filter by Jobs")
         jobsbuttonvisible.wait_for(state="visible")
         jobsbuttonvisible.click()
@@ -183,6 +191,10 @@ class LinkedInScraper(JobBoardScraper):
 
         cards_count = job_cards.count()
         print(f"Nombre de cartes détectées : {cards_count}")
+
+        if debug and max_number_links is not None:
+            cards_count = min(cards_count, max_number_links)
+            print(f"Limitation du nombre de cartes à {cards_count} pour le débogage.")
 
         urls = []
         for i in range(cards_count):
@@ -218,47 +230,40 @@ class LinkedInScraper(JobBoardScraper):
         print(f"Sauvegarde terminée. Total général : {len(urls_existantes)} URLs ({compteur_nouveaux} ajoutées).")
         return urls
 
-    def extract_job_list(self):
-        urls_existantes = []
-        jobs = []
-        new_urls = []
-        if os.path.exists(self.output_file) and os.path.getsize(self.output_file) > 0:
-            try:
-                with open(self.output_file, "r", encoding="utf-8") as f:
-                    urls_existantes = json.load(f)
-                print(f"{len(urls_existantes)} anciennes URLs chargées depuis le fichier.")
-            except json.JSONDecodeError:
-                urls_existantes = []
-
+    def extract_job_list(self, collected_links):
+        collected_links = collected_links or []
+ 
+        all_jobs: list[RawJob] = []
         if os.path.exists(self.jobs_list_file) and os.path.getsize(self.jobs_list_file) > 0:
             try:
                 with open(self.jobs_list_file, "r", encoding="utf-8") as f:
                     saved_jobs = json.load(f)
-                jobs = [RawJob(**job) if isinstance(job, dict) else job for job in saved_jobs]
+                all_jobs = [RawJob(**job) if isinstance(job, dict) else job for job in saved_jobs]
             except json.JSONDecodeError:
-                jobs = []
-
-        existing_job_urls = {job.job_url for job in jobs if job.job_url}
-        new_urls = [u for u in urls_existantes if u not in existing_job_urls]
-
+                all_jobs = []
+ 
+        jobs_by_url: dict[str, RawJob] = {job.job_url: job for job in all_jobs if job.job_url}
+ 
+        new_urls = [u for u in collected_links if u not in jobs_by_url]
+ 
         for url in new_urls:
             self.sb.sleep(5)
             self.page.goto(url)
-
+ 
             job_offer = self._extract_via_dom()
             job_offer.job_url = url
             job_offer.job_id = url.split("/")[-2]
             locator = self.page.get_by_text("No longer accepting applications", exact=False)
             if locator.count() > 0:
                 job_offer.accepting_applications = False
-
+ 
             job_links = self.page.locator(f'a[href*="{url}"]')
             texts = []
             for i in range(job_links.count()):
                 text = job_links.nth(i).inner_text().strip()
                 if text:
                     texts.append(text)
-
+ 
             work_arrangement = None
             employment_type = None
             for attribute in texts:
@@ -266,24 +271,28 @@ class LinkedInScraper(JobBoardScraper):
                     work_arrangement = attribute.lower()
                 if attribute.lower() in self.EMPLOYMENT_TYPES:
                     employment_type = attribute.lower()
-
+ 
             job_offer.work_arrangement = work_arrangement
             job_offer.employment_type = employment_type
             job_offer.easy_apply = self.page.locator("button[aria-label*='Easy Apply']").count() > 0
-            jobs.append(job_offer)
-
+ 
+            jobs_by_url[url] = job_offer
+            all_jobs.append(job_offer)  
+ 
         serializable_jobs = []
-        for job in jobs:
+        for job in all_jobs:
             job_data = job.model_dump() if hasattr(job, "model_dump") else job.dict()
             for key, value in list(job_data.items()):
                 if isinstance(value, (datetime,)):
                     job_data[key] = value.isoformat()
             serializable_jobs.append(job_data)
-
+ 
         with open(self.jobs_list_file, "w", encoding="utf-8") as f:
             json.dump(serializable_jobs, f, indent=4, ensure_ascii=False)
 
-        return jobs
+ 
+        return [jobs_by_url[u] for u in collected_links if u in jobs_by_url]
+
 
     def _extract_via_dom(self):
         parts = self.page.title().split(" | ")
@@ -295,6 +304,87 @@ class LinkedInScraper(JobBoardScraper):
             date_posted=self._safe_text(lambda: self.page.locator(
                 r"text=/\b(?:\d+\+?\s+)?(?:hour|day|week|month|year)s?\s+ago\b/i").first),
         )
+    def _mark_job_closed(self, raw_job: RawJob, job_offer: JobOffer) -> None:
+        """Called when the job page itself reports it's no longer accepting
+        applications -- discovered live, at apply time.
+ 
+        Updates both in-memory objects so the rest of this run treats the
+        job as closed, and persists the correction back to the raw job
+        list file so future runs skip it via matcher.py's existing
+        `job_status == CLOSED` hard filter, instead of re-scoring and
+        re-attempting a job that's already gone."""
+        
+        raw_job.accepting_applications = False
+        job_offer.job_status = JobStatus.CLOSED
+ 
+        self._persist_raw_job_update(raw_job)
+        self._persist_job_offer_update(job_offer)
+ 
+    def _persist_raw_job_update(self, raw_job: RawJob) -> None:
+        """Finds this job by job_url in linkedin_raw_job_list.json and
+        overwrites its entry with the current (now-closed) state. Silent
+        no-op if the file or entry isn't found -- this is a best-effort
+        correction for future runs, not something worth crashing the
+        current apply pass over."""
+        if not os.path.exists(self.jobs_list_file) or os.path.getsize(self.jobs_list_file) == 0:
+            return
+        try:
+            with open(self.jobs_list_file, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except json.JSONDecodeError:
+            print(f"WARNING: could not read {self.jobs_list_file} to persist closed-job status, skipping")
+            return
+ 
+        raw_job_dict = raw_job.model_dump(mode="json")
+        updated = False
+        for i, item in enumerate(existing):
+            if item.get("job_url") == raw_job.job_url:
+                existing[i] = raw_job_dict
+                updated = True
+                break
+ 
+        if not updated:
+            print(f"WARNING: job_url {raw_job.job_url} not found in {self.jobs_list_file}, could not persist closed status")
+            return
+ 
+        with open(self.jobs_list_file, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=4, ensure_ascii=False)
+        print(f"Persisted closed status for {raw_job.job_url} to {self.jobs_list_file}")
+
+    def _persist_job_offer_update(self, job_offer: JobOffer) -> None:
+        """Persist a JobOffer update in structured_jobs.json by
+        matching on job_url and overwriting the stored entry with the current
+        state. This keeps follow-up runs aligned with the last known status
+        without re-scoring or re-attempting already-closed jobs."""
+        if not os.path.exists(self.structured_jobs) or os.path.getsize(self.structured_jobs) == 0:
+            return
+        try:
+            with open(self.structured_jobs, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except json.JSONDecodeError:
+            print(f"WARNING: could not read {self.structured_jobs} to persist JobOffer update, skipping")
+            return
+
+        job_offer_dict = job_offer.model_dump(mode="json")
+        for key, value in list(job_offer_dict.items()):
+            if isinstance(value, datetime):
+                job_offer_dict[key] = value.isoformat()
+
+        updated = False
+        for i, item in enumerate(existing):
+            if item.get("job_url") == job_offer.job_url:
+                existing[i] = job_offer_dict
+                updated = True
+                break
+
+        if not updated:
+            print(f"WARNING: job_url {job_offer.job_url} not found in {self.structured_jobs}, could not persist JobOffer update")
+            return
+
+        with open(self.structured_jobs, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=4, ensure_ascii=False)
+        print(f"Persisted JobOffer update for {job_offer.job_url} to {self.structured_jobs}")
+
 
     # -----------------------------------------------------------------
     # Field-fill logging -- replaces console prints. Every field touched
@@ -703,7 +793,7 @@ class LinkedInScraper(JobBoardScraper):
             self.page.wait_for_timeout(1200)
             return "continue"
 
-        next_button = modal.get_by_role("button", name=re.compile(r"^next$|^suivant$", re.IGNORECASE))
+        next_button = modal.get_by_role("button", name=re.compile(r"^\s*(next|suivant)\s*$", re.IGNORECASE))
         if next_button.count() > 0:
             next_button.first.click()
             self.page.wait_for_timeout(1200)
@@ -734,7 +824,19 @@ class LinkedInScraper(JobBoardScraper):
         self.page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
         locator = self.page.get_by_text("No longer accepting applications", exact=False)
         if locator.count() > 0:
-            raise NotImplementedError("Job is no longer accepting applications. Auto-apply cannot proceed.")
+            print(f"Job {job_url} is no longer accepting applications -- marking closed instead of attempting to apply.")
+            self._mark_job_closed(raw_job, job_offer)
+            log = ApplicationLog(
+                job_url=job_url,
+                candidate_id=candidate.candidate_id,
+                dry_run=True,
+                submitted=False,
+                payload={"reason": "job_no_longer_accepting_applications"},
+                cover_letter_source="none",
+            )
+            save_application_log(self.applications_output_path, log)
+            return log
+
 
         easy_apply_btn = self.page.get_by_role("button", name=re.compile(r"LinkedIn Apply to this job", re.IGNORECASE))
         easy_apply_btn.wait_for(state="visible", timeout=10000)
@@ -762,6 +864,7 @@ class LinkedInScraper(JobBoardScraper):
         for page_index in range(max_pages):
             modal = self.page.locator("[data-testid='dialog-content']")
             modal.wait_for(state="visible", timeout=10000)
+            self.sb.sleep(5)
             page_text = modal.inner_text()
 
             is_personal_info = bool(re.search(r"contact info|coordonn[ée]es", page_text, re.IGNORECASE))
