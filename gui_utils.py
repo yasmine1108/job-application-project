@@ -124,7 +124,7 @@ def register_all_scrapers() -> None:
 def build_cv_llm():
     """Local Ollama model used only for CV extraction (CVExtractor.with_structured_output)."""
     from langchain_ollama import ChatOllama
-    return ChatOllama(model="qwen2.5:7b", temperature=0)
+    return ChatOllama(model=Settings.OLLAMA_MODEL, temperature=0)
 
 
 def build_fallback_llm() -> FallbackLLM:

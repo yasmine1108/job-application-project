@@ -20,7 +20,7 @@ from src.scrapers.job_board_scraper import register_scraper
 from langchain_ollama import ChatOllama
 
 llm = ChatOllama(
-    model="qwen2.5:7b",
+    model=Settings.OLLAMA_MODEL,
     temperature=0
 )
 print(llm.model)

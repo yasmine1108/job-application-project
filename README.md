@@ -137,6 +137,7 @@ Post-traitements déterministes après extraction :
 - `normalize_profile_skills` — normalise les noms de compétences afin de faciliter la comparaison du Matcher.
 - `populate_skill_evidence` — retrouve, par recherche textuelle (pas d'inférence LLM), les passages du CV qui justifient chaque compétence déclarée.
 
+Je voulais travaillé tout le projet avec un modèle en local mais faute de ressources du PC, le processus était trop lent donc j'ai opté pour une architecture hybride où seul le CV est traité localement.
 ### `models.py`
 Définit les modèles Pydantic du profil candidat : `PersonalInformation`, `Education`, `Experience`, `Project`, `Skill`, `Certification`, `SpokenLanguage`, assemblés dans `CandidateProfile`. `MatchingProfile` est une vue allégée du profil, utilisée spécifiquement pour le matching (sans les données d'identité).
 
@@ -221,6 +222,22 @@ Les principaux paramètres ajustables se trouvent dans `config/settings.py` et d
 | `dry_run` | Si `True`, simule la candidature sans soumettre réellement |
 | `board_domains` | Limite le scraping à certaines plateformes (e.g : board_domains=["tanitjobs.com"] pour limiter la recherche à TanitJobs ou board_domains=None pour rechercher sur toutes les plateformes disponibles) |
 | `MIN_OVERALL_SCORE_FOR_AUTO_LETTER` | Score minimum pour générer une lettre de motivation |
+
+## Configuration des LLM
+
+Le projet utilise deux catégories distinctes de modèles, qui ne se configurent pas de la même façon :
+
+1. Gemini et Groq (API cloud, via FallbackLLM) Utilisés pour le matching, l'extraction des offres d'emploi et la génération des lettres de motivation. Il suffit de renseigner les clés API dans le fichier .env :
+
+GEMINI_API_KEY=...
+GROQ_API_KEY=...
+
+FallbackLLM essaie les fournisseurs dans l'ordre (gemini-3.5-flash → gemini-3.5-flash-lite → openai/gpt-oss-120b → openai/gpt-oss-20b) et bascule sur le suivant en cas d'échec. Au moins une des deux clés doit être fournie, sinon build_fallback_llm() lève une erreur.
+
+2. Ollama (modèle local, utilisé uniquement pour l'extraction de CV) CVExtractor s'appuie sur un modèle exécuté localement via Ollama, et non sur une API distante — il n'y a donc pas de clé à partager. Toute personne qui exécute le projet doit :
+
+Installer Ollama sur sa propre machine.
+Télécharger un modèle, par exemple j'ai utilisé :ollama pull qwen2.5:7b
 
 ## Utilisation
 

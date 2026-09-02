@@ -2,7 +2,6 @@
 Streamlit GUI for the job-search agent.
 
 Run with:  streamlit run app.py
-(from the project root, i.e. the directory that contains `src/` and `config/`)
 
 Prerequisites this GUI does NOT change or work around:
 - `config/settings.py` reads GROQ_API_KEY and CEREBRAS_API_KEY via
@@ -11,16 +10,6 @@ Prerequisites this GUI does NOT change or work around:
   dummy values to .env or relax those two lines if you hit that.
 - If GeminiProvider/GroqProvider need a real key to construct without
   erroring, make sure at least one of GEMINI_API_KEY / GROQ_API_KEY is set.
-- CVParser/CVExtractor/JobOfferExtractor import paths in gui_utils.py are
-  best-guesses (see the top of that file) -- fix them if your layout differs.
-
-What this app deliberately does NOT duplicate:
-- Extraction prompts/logic: CVExtractor, JobOfferExtractor (unchanged).
-- Matching/scoring logic: Matcher (unchanged).
-- Scraping/auto-apply logic: TanitJobsScraper/LinkedInScraper via
-  run_pipeline_for_candidate (unchanged).
-It only adapts pydantic models to Streamlit widgets and wires the pieces
-together the same way pipeline.py already does.
 """
 
 from __future__ import annotations
