@@ -4,62 +4,62 @@ import json
 from src.data_helpers import get_job_offer_by_id, get_match_result_by_job_id_from_file, get_raw_job_by_id, load_candidate_profile_from_example
 from src.pipeline import run_pipeline_for_candidate
 from src.models import CandidateProfile
-# from src.models_job import JobOffer, RawJob
+from src.models_job import JobOffer, RawJob
 from src.matchers.matcher import CandidatePreferences, Matcher
 from config.settings import Settings
 from src.llm.fallback import FallbackLLM
 from src.llm.gemini_provider import GeminiProvider
 from src.llm.groq_provider import GroqProvider
 from src.ai_modules.job_offer_extractor import JobOfferExtractor
-# # from src.ai_modules.cv_extractor import CVExtractor
-# # from src.ai_modules.cv_parser import CVParser
+from src.ai_modules.cv_extractor import CVExtractor
+from src.ai_modules.cv_parser import CVParser
 from src.scrapers.tanitjobs import TanitJobsScraper
 from src.scrapers.linkedin import LinkedInScraper
 from src.scrapers.job_board_scraper import register_scraper
 
-# from langchain_ollama import ChatOllama
+from langchain_ollama import ChatOllama
 
-# llm = ChatOllama(
-#     model="qwen2.5:7b",
-#     temperature=0
-# )
-# print(llm.model)
+llm = ChatOllama(
+    model="qwen2.5:7b",
+    temperature=0
+)
+print(llm.model)
 
 def load_candidate(path: str) -> CandidateProfile:
     with open(path, "r", encoding="utf-8") as f:
         return CandidateProfile.model_validate(json.load(f))
 
 
-# def load_jobs(structured_path: str, raw_path: str) -> tuple[list[JobOffer], dict[str, RawJob]]:
-#     with open(structured_path, "r", encoding="utf-8") as f:
-#         jobs = [JobOffer.model_validate(item) for item in json.load(f)]
-#     with open(raw_path, "r", encoding="utf-8") as f:
-#         raw_jobs = [RawJob.model_validate(item) for item in json.load(f)]
-#     raw_by_url = {r.job_url: r for r in raw_jobs}
-#     return jobs, raw_by_url
+def load_jobs(structured_path: str, raw_path: str) -> tuple[list[JobOffer], dict[str, RawJob]]:
+    with open(structured_path, "r", encoding="utf-8") as f:
+        jobs = [JobOffer.model_validate(item) for item in json.load(f)]
+    with open(raw_path, "r", encoding="utf-8") as f:
+        raw_jobs = [RawJob.model_validate(item) for item in json.load(f)]
+    raw_by_url = {r.job_url: r for r in raw_jobs}
+    return jobs, raw_by_url
 
 if __name__ == "__main__":
 
-#     # bot_linkedin = LinkedInScraper()
+    bot_linkedin = LinkedInScraper()
     
-#     # bot_linkedin.start_browser()  
-#     # # bot_linkedin.ensure_logged_in()          
-#     # # bot_linkedin.search_and_collect_links("Python Developer")
-#     # bot_linkedin.extract_job_list()
-#     # bot_linkedin.close_browser()
+    bot_linkedin.start_browser()  
+    bot_linkedin.ensure_logged_in()          
+    bot_linkedin.search_and_collect_links("Python Developer")
+    bot_linkedin.extract_job_list()
+    bot_linkedin.close_browser()
 
 
-#     # tanitjobs_scraper = TanitJobsScraper()
-#     # tanitjobs_scraper.start_browser()
-#     # tanitjobs_scraper.ensure_logged_in()
-#     # tanitjobs_scraper.search_and_collect_links("data engineer")
-#     # tanitjobs_scraper.extract_job_list()
-#     # tanitjobs_scraper.close_browser()
+    tanitjobs_scraper = TanitJobsScraper()
+    tanitjobs_scraper.start_browser()
+    tanitjobs_scraper.ensure_logged_in()
+    tanitjobs_scraper.search_and_collect_links("data engineer")
+    tanitjobs_scraper.extract_job_list()
+    tanitjobs_scraper.close_browser()
 
-#     # cv_parser = CVParser("example_cv.pdf")
-#     # document = cv_parser.extract_text()
-#     # extractor = CVExtractor(llm=llm, debug=True)
-#     # candidate = extractor.extract(document)
+    cv_parser = CVParser("example_cv.pdf")
+    document = cv_parser.extract_text()
+    extractor = CVExtractor(llm=llm, debug=True)
+    candidate = extractor.extract(document)
 
     if not Settings.GEMINI_API_KEY and not Settings.GROQ_API_KEY:
         raise RuntimeError("No API key configured. Set GEMINI_API_KEY and/or GROQ_API_KEY in your environment before running the extractor.")
@@ -98,17 +98,17 @@ if __name__ == "__main__":
         board_domains=["tanitjobs.com","linkedin.com"],  # Specify the job board domains to scrape
     )
     print(f"applied to {len(result['auto_applied'])} jobs, skipped {len(result['to_confirm'])} jobs, failed {len(result['discarded'])} jobs")
-    job_id = "4427131133"
-    job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
-    candidate = load_candidate_profile_from_example(
-        "data/outputs/example_cv_profile.json"
-    )
-    raw_job = get_raw_job_by_id(
-        job_id, "data/outputs/linkedin_raw_job_list.json"
-    )
-    job_offer = get_job_offer_by_id(
-        job_id, "data/outputs/linkedin_structured_jobs.json"
-    )
+    # job_id = "4427131133"
+    # job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
+    # candidate = load_candidate_profile_from_example(
+    #     "data/outputs/example_cv_profile.json"
+    # )
+    # raw_job = get_raw_job_by_id(
+    #     job_id, "data/outputs/linkedin_raw_job_list.json"
+    # )
+    # job_offer = get_job_offer_by_id(
+    #     job_id, "data/outputs/linkedin_structured_jobs.json"
+    # )
     # match_result = get_match_result_by_job_id_from_file(
     #     job_id,
     #     "data/outputs/linkedin_match_results.json",

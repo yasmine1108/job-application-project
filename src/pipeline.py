@@ -38,7 +38,7 @@ def run_pipeline_for_candidate(
     board_domains: list[str] | None = None,  # None = search every registered board
     dry_run: bool = True,
     high_score_threshold: float = 0.75,
-    mid_score_threshold: float = 0.5,
+    mid_score_threshold: float = 0.4,
 ) -> dict:
     ensure_mandatory_contact_fields(candidate)
     matching_profile = candidate.get_matching_profile()
